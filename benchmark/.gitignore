@@ -1,0 +1,10 @@
+#ignore all target (files and folders)
+
+**/target
+**/.idea
+project/project/
+kafka-logs
+spark-benchmark/checkpointdir
+/checkpointdir/
+/benchmark.ipr
+/benchmark.iws
