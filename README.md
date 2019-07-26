@@ -13,7 +13,6 @@ A pipeline of common IoT operations has been implemented:
 
 The data-stream-generator publishes a configurable volume of data onto two Kafka topics (ndwflow and ndwspeed). The default volume of the data stream is 760 messages per second (380 messages per topic) which equals to 1 368 000 messages per 30 minutes.
 
-
 The flow of operations done in the benchmark is as follows:
 
    1. Ingest: Read JSON event data from Kafka from two input streams: speed stream and flow stream.
@@ -23,20 +22,14 @@ The flow of operations done in the benchmark is as follows:
             This internal id describes the lane of the road.
             By joining this we know how many cars passed and how fast they drove
             on a certain lane at a certain time point.
-   4. Aggregation: we aggregate the speed and the flow over all
-                   the lanes belonging to the same measurement ID. So here the data is
-                   grouped by measurement ID + timestamp. For the speed, we compute the average
-                    speed over all the lanes and for the flow, we compute the accumulated flow
-                    over all the lanes. We then know how fast cars drove past the measurement
+   4. Tumbling window: we aggregate the speed and the flow over all
+                   the lanes belonging to the same measurement ID. So here the data is grouped by measurement ID + timestamp. For the speed, we compute the average speed over all the lanes and for the flow, we compute the accumulated flow over all the lanes. We then know how fast cars drove past the measurement
                     point on average and how many cars passed in the last time period.
-   5. Window operations: For the windowing phase, we will compute the relative change in flow and
-                         speed over two lookback period: a short one and a long one. The length
-                         of the lookback periods is defined in the benchmarkConfig.conf file.
-                         The relative change is calculated by computing:
+   5. Sliding window: For the windowing phase, we will compute the relative change in flow and speed over two lookback period: a short one and a long one. The length of the lookback periods is defined in the benchmarkConfig.conf file. The relative change is calculated by computing:
 
                              speed(t) - speed(t-1) / speed(t-1)
 
-   6. Output: Printing the output.
+   6. Publishing output back to Kafka
 
 ## Running the benchmark locally
 To run the benchmark, the following services need to be installed and brought up:
@@ -47,7 +40,9 @@ To run the benchmark, the following services need to be installed and brought up
 - Benchmark-suite of framework
 
 ### Zookeeper
-Install Zookeeper
+Install Zookeeper: https://zookeeper.apache.org/doc/r3.1.2/zookeeperStarted.html
+
+Start zookeeper at localhost:2181.
 
 ### Kafka
 Install Kafka by downloading it from:
