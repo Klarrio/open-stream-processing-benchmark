@@ -100,7 +100,8 @@ class InitialStages(settings: BenchmarkSettingsForKafkaStreams)
     val joinedSpeedAndFlowStreams = parsedFlowStream.join(parsedSpeedStream)({
       (v1: FlowObservation, v2: SpeedObservation) => new AggregatableObservation(v1, v2)
     }, JoinWindows.of(Duration.ofMillis(settings.general.publishIntervalMillis))
-      .grace(Duration.ofMillis(settings.specific.gracePeriodMillis)))(Joined
+      .grace(Duration.ofMillis(settings.specific.gracePeriodMillis))
+      .until(settings.general.publishIntervalMillis + settings.specific.gracePeriodMillis))(Joined
       .`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.FlowObservationSerde, CustomObjectSerdes.SpeedObservationSerde))
 
     joinedSpeedAndFlowStreams

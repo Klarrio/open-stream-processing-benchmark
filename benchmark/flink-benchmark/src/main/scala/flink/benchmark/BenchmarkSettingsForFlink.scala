@@ -23,6 +23,8 @@ class BenchmarkSettingsForFlink(overrides: Map[String, String] = Map()) extends 
     val maxOutOfOrderness: Int = flinkProperties.getInt("max.out.of.orderness")
     val bufferTimeout: Long = flinkProperties.getLong("buffer.timeout")
     val checkpointInterval: Int = flinkProperties.getInt("checkpoint.interval")
+    val useCustomTumblingWindowTrigger: Boolean = flinkProperties.getString("tumbling.window.trigger") == "custom"
+    val useCustomSlidingWindowTrigger: Boolean = flinkProperties.getString("sliding.window.trigger") == "custom"
 
     // Checkpointing
     val checkpointDir: String = if (general.local) {

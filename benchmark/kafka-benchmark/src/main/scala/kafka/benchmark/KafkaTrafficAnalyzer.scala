@@ -9,6 +9,7 @@
 
 package kafka.benchmark
 
+import java.sql.Timestamp
 import java.util.Properties
 
 import common.benchmark.output.JsonPrinter
@@ -177,15 +178,15 @@ object KafkaTrafficAnalyzer {
       val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawStreams)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(parsedFlowStream, parsedSpeedStream)
       val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
-      val relativeChangeStream = analyticsStages.relativeChangeStage(aggregateStream)
+      val relativeChangeStream: kstream.KStream[Windowed[String], RelativeChangeObservation] = analyticsStages.relativeChangeStage(aggregateStream)
 
-      relativeChangeStream.map { (key: String, obs: RelativeChangeObservation) => observationFormatter.pub(obs) }
+      relativeChangeStream.map { (key: Windowed[String], obs: RelativeChangeObservation) => observationFormatter.pub(obs) }
         .to(settings.general.outputTopic)(Produced.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.StringSerde))
 
       if (settings.general.shouldPrintOutput) {
-        relativeChangeStream
-          .selectKey { case obs: (String, RelativeChangeObservation) => obs._2.measurementId }
-          .print(Printed.toSysOut())
+        val stringstringstream: kstream.KStream[String, String] = relativeChangeStream
+          .map { (key: Windowed[String], obs: RelativeChangeObservation) => (new Timestamp(obs.publishTimestamp).toString, obs.toJsonString())}
+        stringstringstream.print(Printed.toSysOut[String, String]())
       }
   }
 
@@ -205,9 +206,8 @@ object KafkaTrafficAnalyzer {
     streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, settings.specific.numStreamsThreads.toString)
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, settings.specific.commitInterval.toString)
     streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, settings.specific.cacheMaxBytesBuffering.toString)
-    streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, classOf[KafkaAppendTimestampExtractor].getName)
     if (settings.general.mode.equals(SINGLE_BURST)) {
-      streamsConfiguration.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, "300000")
+      streamsConfiguration.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, "10000")
     }
     // Producer Config
     streamsConfiguration.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, settings.specific.compressionTypeConfig.toString)
@@ -222,13 +222,6 @@ object KafkaTrafficAnalyzer {
     streamsConfiguration.put(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG, "1000")
 
     streamsConfiguration
-  }
-}
-
-
-class KafkaAppendTimestampExtractor extends TimestampExtractor {
-  override def extract(record: ConsumerRecord[AnyRef, AnyRef], previousTimestamp: Long): Long = {
-    record.timestamp()
   }
 }
 
