@@ -42,7 +42,7 @@ class AnalyticsStages(
   def aggregationStage(parsedAndJoinedStream: DataStream[AggregatableObservation], test: Boolean = false): DataStream[AggregatableObservation] = {
     // summing up over all the lanes of a measurement point
     val aggregatedStream = {
-      if (settings.specific.useCustomTumblingWindowTrigger){
+      if (settings.specific.useCustomTumblingWindow){
         parsedAndJoinedStream
           .keyingBy(obs => (obs.measurementId, obs.timestamp))
           .window(TumblingEventTimeWindows.of(Time.milliseconds(settings.general.publishIntervalMillis)))
@@ -75,7 +75,7 @@ class AnalyticsStages(
     * @return [[DataStream]] of the [[RelativeChangeObservation]]
     */
   def relativeChangeStage(aggregatedStream: DataStream[AggregatableObservation], test: Boolean = false): DataStream[RelativeChangeObservation] = {
-    val relativeChangeStream = if (settings.specific.useCustomSlidingWindowTrigger){
+    val relativeChangeStream = if (settings.specific.useCustomSlidingWindow){
       aggregatedStream
         .keyBy {_.measurementId}
         .flatMap(new ComputeRelativeChange(settings))

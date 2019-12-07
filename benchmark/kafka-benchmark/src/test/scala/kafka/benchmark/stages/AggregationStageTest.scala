@@ -12,6 +12,7 @@ import org.apache.kafka.streams.TopologyTestDriver
 import org.apache.kafka.streams.kstream._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.kstream.Consumed
+import org.apache.kafka.streams.state.{KeyValueStore, StoreBuilder, Stores}
 import org.apache.kafka.streams.test.ConsumerRecordFactory
 import org.scalatest._
 
@@ -20,6 +21,13 @@ class AggregationStageTest extends FunSuite {
 
   val props: Properties = KafkaTrafficAnalyzer.initKafka(settings)
   val builder = new StreamsBuilder()
+
+  val persistentKeyValueStore: StoreBuilder[KeyValueStore[String, AggregatableObservation]] = Stores
+    .keyValueStoreBuilder(Stores.persistentKeyValueStore("lane-aggregator-state-store"),
+      CustomObjectSerdes.StringSerde,
+      CustomObjectSerdes.AggregatableObservationSerde
+    )
+  builder.addStateStore(persistentKeyValueStore)
 
   val analyticsStages = new AnalyticsStages(settings)
 
@@ -52,6 +60,8 @@ class AggregationStageTest extends FunSuite {
       .sortBy { f: AggregatableObservation => (f.measurementId, f.timestamp) }
     val myOutputList = myOutput
       .sortBy { f: AggregatableObservation => (f.measurementId, f.timestamp) }
+
+    myOutputList.foreach(println)
     assert(expected == myOutputList)
     topologyTestDriver.close()
   }

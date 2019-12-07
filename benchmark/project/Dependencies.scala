@@ -33,7 +33,7 @@ object Dependencies {
     val mockito = "1.9.5"
 
     val snakeYaml = "1.17"
-    val spark = "2.3.1"
+    val spark = "2.4.1"
     val sparkTestingBase = "2.4.0_0.11.0"
     val storm = "1.1.1"
     val scalaBinary = "2.11"

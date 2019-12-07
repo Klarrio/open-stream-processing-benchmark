@@ -29,13 +29,12 @@ class AnalyticsStages(sparkSession: SparkSession, settings: BenchmarkSettingsFor
 
   def aggregationStage(parsedAndJoinedStream: DataFrame): DataFrame = {
     val aggregatedStream = parsedAndJoinedStream
-      .withWatermark("timestamp", settings.specific.watermarkMillis + " milliseconds")
+      .withWatermark("publishTimestamp", settings.specific.watermarkMillis + " milliseconds")
       .groupBy(
-        window($"timestamp", settings.general.publishIntervalMillis + " milliseconds", settings.general.publishIntervalMillis + " milliseconds"),
-        $"measurementId", $"latitude", $"longitude", $"period", $"flowAccuracy", $"speedAccuracy", $"numLanes"
+        window($"publishTimestamp", settings.general.publishIntervalMillis + " milliseconds", settings.general.publishIntervalMillis + " milliseconds"),
+        $"measurementId", $"timestamp", $"latitude", $"longitude", $"period", $"flowAccuracy", $"speedAccuracy", $"numLanes"
       )
       .agg(
-        max("timestamp").as("timestamp"),
         collect_set($"lanes").as("lanes"),
         sum($"accumulatedFlow").as("accumulatedFlow"),
         avg($"averageSpeed").as("averageSpeed"),

@@ -86,13 +86,9 @@ object StructuredStreamingTrafficAnalyzer {
           .withColumn("publishTimestamp", outputUtils.timeUDF($"timestamp")).drop("timestamp")
           .select(lit(settings.specific.jobProfileKey).as("key"), to_json(struct($"publishTimestamp")).as("value"))
         if (settings.general.shouldPrintOutput) {
-          outputSpeedStream.explain(true)
-          outputFlowStream.explain(true)
           outputUtils.printToConsole(outputSpeedStream)
           outputUtils.printToConsole(outputFlowStream, awaitTermination = true)
         } else {
-          outputSpeedStream.explain(true)
-          outputFlowStream.explain(true)
           outputUtils.writeToKafka(outputSpeedStream, queryNbr = 1)
           outputUtils.writeToKafka(outputFlowStream, queryNbr = 2, awaitTermination = !settings.general.shouldPrintOutput)
         }
@@ -112,13 +108,9 @@ object StructuredStreamingTrafficAnalyzer {
 
 
         if (settings.general.shouldPrintOutput) {
-          outputFlowStream.explain(true)
-          outputSpeedStream.explain(true)
           outputUtils.printToConsole(flowStream)
           outputUtils.printToConsole(speedStream, awaitTermination = true)
         } else {
-          outputFlowStream.explain(true)
-          outputSpeedStream.explain(true)
           outputUtils.writeToKafka(outputFlowStream, queryNbr = 1)
           outputUtils.writeToKafka(outputSpeedStream, queryNbr = 2, awaitTermination = !settings.general.shouldPrintOutput)
         }
@@ -132,10 +124,8 @@ object StructuredStreamingTrafficAnalyzer {
           .select(lit(settings.specific.jobProfileKey).as("key"), to_json(struct(joinedSpeedAndFlowStreams.columns.map(col(_)): _*)).as("value"))
 
         if (settings.general.shouldPrintOutput) {
-          outputJoinedStream.explain(true)
           outputUtils.printToConsole(outputJoinedStream, awaitTermination = true)
         } else {
-          outputJoinedStream.explain(true)
           outputUtils.writeToKafka(outputJoinedStream, awaitTermination = !settings.general.shouldPrintOutput)
         }
 
@@ -146,13 +136,11 @@ object StructuredStreamingTrafficAnalyzer {
         val aggregatedStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
 
         if (settings.general.shouldPrintOutput) {
-          aggregatedStream.explain(true)
           outputUtils.printToConsole(aggregatedStream, awaitTermination = true)
         } else {
           val outputAggregatedStream = aggregatedStream
             .withColumn("publishTimestamp", outputUtils.timeUDF($"publishTimestamp"))
             .select(lit(settings.specific.jobProfileKey).as("key"), to_json(struct(aggregatedStream.columns.map(col(_)): _*)).as("value"))
-          outputAggregatedStream.explain(true)
           outputUtils.writeToKafka(outputAggregatedStream, awaitTermination = !settings.general.shouldPrintOutput)
         }
 

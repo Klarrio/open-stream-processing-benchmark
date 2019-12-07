@@ -32,7 +32,10 @@ class BenchmarkSettingsForKafkaStreams(overrides: Map[String, String] = Map()) e
     val batchSize: Long = kafkaStreamsProperties.getLong("batch.size")
     val lingerMs: Int = kafkaStreamsProperties.getInt("linger.ms")
     val gracePeriodMillis: Int = kafkaStreamsProperties.getInt("grace.period.ms")
+    val maxTaskIdleMillis: String = kafkaStreamsProperties.getString("max.task.idle.ms")
     val kafkaCheckpointDir: String = general.configProperties.getString("kafkastreams.checkpoint.dir")
+    val useCustomTumblingWindow: Boolean = kafkaStreamsProperties.getString("tumbling.window") == "custom"
+    val useCustomSlidingWindow: Boolean = kafkaStreamsProperties.getString("sliding.window") == "custom"
 
     val jobProfileKey: String = general.mkJobProfileKey("kafka", lingerMs)
 

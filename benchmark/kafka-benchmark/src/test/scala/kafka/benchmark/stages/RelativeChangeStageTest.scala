@@ -1,6 +1,5 @@
 package kafka.benchmark.phases
 
-import java.util
 import java.util.Properties
 
 import common.benchmark.output.{AggregatableObservationSerializer, RelativeChangeDeserializer}
@@ -8,18 +7,16 @@ import common.benchmark.{AggregatableObservation, RelativeChangeObservation}
 import common.utils.TestObservations
 import kafka.benchmark.stages.{AnalyticsStages, CustomObjectSerdes}
 import kafka.benchmark.{BenchmarkSettingsForKafkaStreams, KafkaTrafficAnalyzer}
-import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.streams.TopologyTestDriver
-import org.apache.kafka.streams.kstream.{Windowed, _}
-import org.apache.kafka.streams.kstream.internals.TimeWindow
+import org.apache.kafka.streams.kstream._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.kstream.Consumed
+import org.apache.kafka.streams.state.{KeyValueStore, StoreBuilder, Stores}
 import org.apache.kafka.streams.test.ConsumerRecordFactory
 import org.scalatest._
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConverters._
 import scala.util.Try
 
 class RelativeChangeStageTest extends FunSuite {
@@ -31,15 +28,21 @@ class RelativeChangeStageTest extends FunSuite {
     val props: Properties = KafkaTrafficAnalyzer.initKafka(settings)
     val builder = new StreamsBuilder()
 
+    val persistentKeyValueStore: StoreBuilder[KeyValueStore[String, List[AggregatableObservation]]] = Stores
+      .keyValueStoreBuilder(Stores.persistentKeyValueStore("relative-change-state-store"),
+        CustomObjectSerdes.StringSerde,
+        CustomObjectSerdes.AggregatedObservationListSerde
+      )
+      .withCachingEnabled()
+    builder.addStateStore(persistentKeyValueStore)
+
     val analyticsStages = new AnalyticsStages(settings)
 
     val inputStream = builder.stream("input-topic")(Consumed.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.AggregatableObservationSerde))
-      .map[Windowed[String], AggregatableObservation] {
-      case mapper: (String, AggregatableObservation) =>
-        (new Windowed[String](mapper._1, new TimeWindow(1000, 2000)), mapper._2)
-    }
+
+
     analyticsStages.relativeChangeStage(inputStream)
-      .map[String, RelativeChangeObservation] { (key: Windowed[String], obs: RelativeChangeObservation) => (obs.measurementId, obs) }
+      .map[String, RelativeChangeObservation] { (key: String, obs: RelativeChangeObservation) => (obs.measurementId, obs) }
       .to("output-topic")(Produced.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.RelativeChangeObservationSerde))
 
     val topology = builder.build()
