@@ -19,7 +19,7 @@ import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
 import org.apache.flink.runtime.state.filesystem.FsStateBackend
 import common.config.LastStage._
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer010
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer
 import org.apache.flink.streaming.api.scala._
 
 object FlinkTrafficAnalyzer {
@@ -52,7 +52,7 @@ object FlinkTrafficAnalyzer {
     val kafkaProperties = initKafka(settings)
     val initialStages = new InitialStages(settings, kafkaProperties)
     val analyticsStages = new AnalyticsStages(settings, kafkaProperties)
-    val kafkaProducer = new FlinkKafkaProducer010[String](settings.general.outputTopic, new OutputMessageSerializer(settings), kafkaProperties)
+    val kafkaProducer = new FlinkKafkaProducer[String](settings.general.outputTopic, new OutputMessageSerializer(settings), kafkaProperties)
 
     registerCorrectPartialFlowForRun(settings, executionEnvironment, kafkaProducer, initialStages, analyticsStages)
 
@@ -60,19 +60,21 @@ object FlinkTrafficAnalyzer {
   }
 
   def registerCorrectPartialFlowForRun(settings: BenchmarkSettingsForFlink,
-    executionEnvironment: StreamExecutionEnvironment, kafkaProducer: FlinkKafkaProducer010[String],
+    executionEnvironment: StreamExecutionEnvironment, kafkaProducer: FlinkKafkaProducer[String],
     initialStages: InitialStages, analyticsStages: AnalyticsStages)
   : Unit = settings.general.lastStage match {
     case UNTIL_INGEST =>
-      val rawStreams = initialStages.ingestStage(executionEnvironment)
-      rawStreams.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
+      rawFlowStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
+      rawSpeedStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
-        rawStreams.print()
+        rawFlowStream.print()
+        rawSpeedStream.print()
       }
 
     case UNTIL_PARSE =>
-      val rawStreams = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawStreams)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
       flowStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       speedStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
@@ -81,8 +83,8 @@ object FlinkTrafficAnalyzer {
       }
 
     case UNTIL_JOIN =>
-      val rawStreams = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawStreams)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
       joinedSpeedAndFlowStreams.map { r => JsonPrinter.jsonFor(r) }.addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
@@ -90,8 +92,8 @@ object FlinkTrafficAnalyzer {
       }
 
     case UNTIL_TUMBLING_WINDOW =>
-      val rawStreams = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawStreams)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
       val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
       aggregateStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
@@ -100,8 +102,8 @@ object FlinkTrafficAnalyzer {
       }
 
     case UNTIL_SLIDING_WINDOW =>
-      val rawStreams = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawStreams)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
       val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
       val relativeChangeStream = analyticsStages.relativeChangeStage(aggregateStream)
@@ -140,8 +142,10 @@ object FlinkTrafficAnalyzer {
     * @return [[Properties]] for Kafka
     */
   def initKafka(settings: BenchmarkSettingsForFlink): Properties = {
+    val timeToString = "FLINK/" + System.currentTimeMillis()
     val kafkaProperties = new Properties()
     kafkaProperties.setProperty("bootstrap.servers", settings.general.kafkaBootstrapServers)
+    kafkaProperties.setProperty("group.id", timeToString)
     kafkaProperties
   }
 }

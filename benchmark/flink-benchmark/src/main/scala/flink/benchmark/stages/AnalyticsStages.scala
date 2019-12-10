@@ -5,7 +5,7 @@ import java.util.Properties
 import common.benchmark._
 import common.benchmark.stages.AnalyticsStagesTemplate
 import flink.benchmark.BenchmarkSettingsForFlink
-import org.apache.flink.api.common.functions.{ReduceFunction, RichFlatMapFunction, RichMapFunction}
+import org.apache.flink.api.common.functions.{ReduceFunction, RichFlatMapFunction}
 import org.apache.flink.api.common.state._
 import org.apache.flink.api.scala._
 import org.apache.flink.configuration.Configuration

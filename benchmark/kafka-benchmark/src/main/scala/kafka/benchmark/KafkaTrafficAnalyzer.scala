@@ -128,9 +128,9 @@ object KafkaTrafficAnalyzer {
     initialStages: InitialStages, analyticsStages: AnalyticsStages)
   : Unit = settings.general.lastStage match {
     case UNTIL_INGEST =>
-      val rawStreams = initialStages.ingestStage(builder)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(builder)
 
-      rawStreams.transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
+      rawFlowStream.transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
         override def get(): Transformer[String, String, KeyValue[String, String]] = {
           new Transformer[String, String, KeyValue[String, String]] {
             var processorContext: ProcessorContext = _
@@ -149,13 +149,31 @@ object KafkaTrafficAnalyzer {
         }
       }).to(settings.general.outputTopic)(Produced.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.StringSerde))
 
+      rawSpeedStream.transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
+        override def get(): Transformer[String, String, KeyValue[String, String]] = {
+          new Transformer[String, String, KeyValue[String, String]] {
+            var processorContext: ProcessorContext = _
 
+            override def init(context: ProcessorContext): Unit = {
+              processorContext = context
+            }
+
+            override def transform(key: String, value: String): KeyValue[String, String] = {
+              val (parsedKey, parsedValue) = observationFormatter.pub(processorContext.topic(), value, processorContext.timestamp())
+              new KeyValue[String, String](parsedKey, parsedValue)
+            }
+
+            override def close(): Unit = {}
+          }
+        }
+      }).to(settings.general.outputTopic)(Produced.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.StringSerde))
       if (settings.general.shouldPrintOutput) {
-        rawStreams.print(Printed.toSysOut[String, String]())
+        rawFlowStream.print(Printed.toSysOut[String, String]())
+        rawSpeedStream.print(Printed.toSysOut[String, String]())
       }
     case UNTIL_PARSE =>
-      val rawStreams = initialStages.ingestStage(builder)
-      val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawStreams)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(builder)
+      val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
 
       parsedFlowStream.map { (key: String, obs: FlowObservation) => observationFormatter.pub(obs) }
         .to(settings.general.outputTopic)(Produced.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.StringSerde))
@@ -168,8 +186,8 @@ object KafkaTrafficAnalyzer {
       }
 
     case UNTIL_JOIN =>
-      val rawStreams = initialStages.ingestStage(builder)
-      val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawStreams)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(builder)
+      val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(parsedFlowStream, parsedSpeedStream)
 
       joinedSpeedAndFlowStreams.map { (key: String, obs: AggregatableObservation) => observationFormatter.pub(obs) }
@@ -180,8 +198,8 @@ object KafkaTrafficAnalyzer {
       }
 
     case UNTIL_TUMBLING_WINDOW =>
-      val rawStreams = initialStages.ingestStage(builder)
-      val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawStreams)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(builder)
+      val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(parsedFlowStream, parsedSpeedStream)
       val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
 
@@ -194,8 +212,8 @@ object KafkaTrafficAnalyzer {
       }
 
     case UNTIL_SLIDING_WINDOW =>
-      val rawStreams = initialStages.ingestStage(builder)
-      val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawStreams)
+      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(builder)
+      val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(parsedFlowStream, parsedSpeedStream)
       val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
       val relativeChangeStream: kstream.KStream[String, RelativeChangeObservation] = analyticsStages.relativeChangeStage(aggregateStream)

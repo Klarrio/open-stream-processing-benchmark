@@ -3,26 +3,29 @@ package flink.benchmark.stages
 import flink.benchmark.BenchmarkSettingsForFlink
 import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.streaming.api.scala.createTypeInformation
-import org.apache.flink.streaming.util.serialization.{KeyedDeserializationSchema, KeyedSerializationSchema}
+import org.apache.flink.streaming.connectors.kafka.KafkaDeserializationSchema
+import org.apache.flink.streaming.util.serialization.KeyedSerializationSchema
+import org.apache.kafka.clients.consumer.ConsumerRecord
 
 
 /**
   * Deserializers for the flow and speed events
   * Returns key, topic and value for each event
   */
-class RawObservationDeserializer extends KeyedDeserializationSchema[(String, String, String)] {
+class RawObservationDeserializer extends KafkaDeserializationSchema[(String, String, Long)] {
 
-  override def deserialize(messageKey: Array[Byte], message: Array[Byte], topic: String, partition: Int, offset: Long): (String, String, String) = {
-    val key: String = new String(messageKey, "UTF-8")
-    val value: String = new String(message, "UTF-8")
-    (key, topic, value)
+  override def deserialize(record: ConsumerRecord[Array[Byte], Array[Byte]]): (String, String, Long) = {
+    val key: String = new String(record.key(), "UTF-8")
+    val value: String = new String(record.value(), "UTF-8")
+    (key, value, record.timestamp())
   }
 
-  override def isEndOfStream(t: (String, String, String)): Boolean = {
+
+  override def isEndOfStream(t: (String, String, Long)): Boolean = {
     false
   }
 
-  override def getProducedType: TypeInformation[(String, String, String)] = { createTypeInformation[(String, String, String)] }
+  override def getProducedType: TypeInformation[(String, String, Long)] = { createTypeInformation[(String, String, Long)] }
 
 }
 
