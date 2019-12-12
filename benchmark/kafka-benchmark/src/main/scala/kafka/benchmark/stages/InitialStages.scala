@@ -32,11 +32,11 @@ class InitialStages(settings: BenchmarkSettingsForKafkaStreams)
     * @param builder
     * @return raw speed and flow events
     */
-  def ingestStage(builder: StreamsBuilder): (KStream[String, String], KStream[String, String]) = {
-    val flowStreams: KStream[String, String] = builder.stream[String, String](Set(settings.general.flowTopic))
-    val speedStreams: KStream[String, String] = builder.stream[String, String](Set(settings.general.speedTopic))
+  def ingestStage(builder: StreamsBuilder): KStream[String, String] = {
+    // both topics need to be read in together otherwise the synchronization of bursts goes wrong
+    val rawStreams: KStream[String, String] = builder.stream[String, String](Set(settings.general.flowTopic, settings.general.speedTopic))
 
-    (flowStreams, speedStreams)
+    rawStreams
   }
 
 
@@ -46,8 +46,8 @@ class InitialStages(settings: BenchmarkSettingsForKafkaStreams)
     * @param builder kafka-streams builders
     * @return [[KStream]] of [[FlowObservation]] and [[KStream]] of [[SpeedObservation]]
     */
-  def parsingStage(rawFlowStream: KStream[String, String], rawSpeedStream: KStream[String, String]): (KStream[String, FlowObservation], KStream[String, SpeedObservation]) = {
-    val flowStream: KStream[String, FlowObservation] = rawFlowStream
+  def parsingStage(rawStreams: KStream[String, String]): (KStream[String, FlowObservation], KStream[String, SpeedObservation]) = {
+    val flowStream: KStream[String, FlowObservation] = rawStreams.filter { case (key, value) => value.contains("flow") }
       .transform(new TransformerSupplier[String, String, KeyValue[String, FlowObservation]] {
         override def get(): Transformer[String, String, KeyValue[String, FlowObservation]] = {
           new Transformer[String, String, KeyValue[String, FlowObservation]] {
@@ -67,7 +67,7 @@ class InitialStages(settings: BenchmarkSettingsForKafkaStreams)
         }
       })
 
-    val speedStream: KStream[String, SpeedObservation] = rawSpeedStream
+    val speedStream: KStream[String, SpeedObservation] = rawStreams.filter { case (key, value) => value.contains("speed") }
       .transform(new TransformerSupplier[String, String, KeyValue[String, SpeedObservation]] {
         override def get(): Transformer[String, String, KeyValue[String, SpeedObservation]] = {
           new Transformer[String, String, KeyValue[String, SpeedObservation]] {

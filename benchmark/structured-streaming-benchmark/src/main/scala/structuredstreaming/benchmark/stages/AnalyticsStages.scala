@@ -1,6 +1,7 @@
 package structuredstreaming.benchmark.stages
 
 import common.benchmark.stages.AnalyticsStagesTemplate
+import common.config.LastStage.UNTIL_TUMBLING_WINDOW
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{max, window, _}
 import structuredstreaming.benchmark.BenchmarkSettingsForStructuredStreaming
@@ -29,9 +30,9 @@ class AnalyticsStages(sparkSession: SparkSession, settings: BenchmarkSettingsFor
 
   def aggregationStage(parsedAndJoinedStream: DataFrame): DataFrame = {
     val aggregatedStream = parsedAndJoinedStream
-      .withWatermark("publishTimestamp", settings.specific.watermarkMillis + " milliseconds")
+      .withWatermark("timestamp", settings.specific.watermarkMillis + " milliseconds")
       .groupBy(
-        window($"publishTimestamp", settings.general.publishIntervalMillis + " milliseconds", settings.general.publishIntervalMillis + " milliseconds"),
+        window($"timestamp", settings.general.publishIntervalMillis + " milliseconds", settings.general.publishIntervalMillis + " milliseconds"),
         $"measurementId", $"timestamp", $"latitude", $"longitude", $"period", $"flowAccuracy", $"speedAccuracy", $"numLanes"
       )
       .agg(

@@ -59,12 +59,12 @@ class InitialStages(sparkSession: SparkSession, settings: BenchmarkSettingsForSt
 
     val flowSchema = StructType(Seq(
       StructField("lat", DoubleType, true), StructField("long", DoubleType, true), StructField("flow", IntegerType, true),
-      StructField("period", IntegerType, true), StructField("accuracy", IntegerType, true), StructField("timestamp", TimestampType, true),
+      StructField("period", IntegerType, true), StructField("accuracy", IntegerType, true), StructField("timestamp", StringType, true),
       StructField("num_lanes", IntegerType, true)
     ))
     val speedSchema = StructType(Seq(
       StructField("lat", DoubleType, true), StructField("long", DoubleType, true), StructField("speed", DoubleType, true),
-      StructField("accuracy", IntegerType, true), StructField("timestamp", TimestampType, true),
+      StructField("accuracy", IntegerType, true), StructField("timestamp", StringType, true),
       StructField("num_lanes", IntegerType, true)
     ))
 
@@ -72,22 +72,22 @@ class InitialStages(sparkSession: SparkSession, settings: BenchmarkSettingsForSt
     val flowStream = rawFlowStream
       .selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp")
       .select(
-      split($"key", "/lane").getItem(0).as("measurementId"),
-      concat(lit("lane"), split($"key", "/lane").getItem(1)).as("internalId"),
-      from_json($"value", flowSchema).as("flowObservation"),
-      col("timestamp").as("flowPublishTimestamp"),
-      current_timestamp().as("flowIngestTimestamp")
-    ).withColumn("timestamp", col("flowObservation.timestamp"))
+        split($"key", "/lane").getItem(0).as("measurementId"),
+        concat(lit("lane"), split($"key", "/lane").getItem(1)).as("internalId"),
+        from_json($"value", flowSchema).as("flowObservation"),
+        col("timestamp").as("flowPublishTimestamp"),
+        current_timestamp().as("flowIngestTimestamp")
+      ).withColumn("timestamp", unix_timestamp($"flowObservation.timestamp", "yyyy-MM-dd HH:mm:ss").cast(TimestampType))
 
     val speedStream = rawSpeedStream
       .selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp")
       .select(
-      split($"key", "/lane").getItem(0).as("measurementId"),
-      concat(lit("lane"), split($"key", "/lane").getItem(1)).as("internalId"),
-      from_json($"value", speedSchema).as("speedObservation"),
-      col("timestamp").as("speedPublishTimestamp"),
-      current_timestamp().as("speedIngestTimestamp")
-    ).withColumn("timestamp", col("speedObservation.timestamp"))
+        split($"key", "/lane").getItem(0).as("measurementId"),
+        concat(lit("lane"), split($"key", "/lane").getItem(1)).as("internalId"),
+        from_json($"value", speedSchema).as("speedObservation"),
+        col("timestamp").as("speedPublishTimestamp"),
+        current_timestamp().as("speedIngestTimestamp")
+      ).withColumn("timestamp", unix_timestamp($"speedObservation.timestamp", "yyyy-MM-dd HH:mm:ss").cast(TimestampType))
 
     (flowStream, speedStream)
   }
@@ -101,27 +101,24 @@ class InitialStages(sparkSession: SparkSession, settings: BenchmarkSettingsForSt
     */
   def joinStage(parsedFlowStream: DataFrame, parsedSpeedStream: DataFrame): DataFrame = {
     val flowStreamWithWatermark = parsedFlowStream
-      .withColumn("window", window(col("flowPublishTimestamp"),
+      .withColumn("window", window(col("timestamp"),
         settings.general.publishIntervalMillis + " milliseconds",
         settings.general.publishIntervalMillis + " milliseconds"))
-      .withWatermark("flowPublishTimestamp", settings.specific.watermarkMillis + " milliseconds")
+      .withWatermark("timestamp", settings.specific.watermarkMillis + " milliseconds")
 
     val speedStreamWithWatermark = parsedSpeedStream
-      .withColumn("window", window(col("speedPublishTimestamp"),
+      .withColumn("window", window(col("timestamp"),
         settings.general.publishIntervalMillis + " milliseconds",
         settings.general.publishIntervalMillis + " milliseconds"))
-      .withWatermark("speedPublishTimestamp", settings.specific.watermarkMillis + " milliseconds")
+      .withWatermark("timestamp", settings.specific.watermarkMillis + " milliseconds")
 
     val latestTimestampUDF = udf((flowTimestamp: Timestamp, speedTimestamp: Timestamp) =>
       if (flowTimestamp.before(speedTimestamp)) speedTimestamp else flowTimestamp)
-
-
     val joinedSpeedAndFlowStreams = flowStreamWithWatermark
       .join(speedStreamWithWatermark, Seq("measurementId", "internalId", "timestamp", "window"))
       .select(
         $"measurementId",
         $"internalId".as("lanes"),
-        $"timestamp",
         $"timestamp",
         $"flowObservation.lat".as("latitude"),
         $"flowObservation.long".as("longitude"),
@@ -134,6 +131,7 @@ class InitialStages(sparkSession: SparkSession, settings: BenchmarkSettingsForSt
         latestTimestampUDF($"flowPublishTimestamp", $"speedPublishTimestamp").as("publishTimestamp"),
         latestTimestampUDF($"flowIngestTimestamp", $"speedIngestTimestamp").as("ingestTimestamp")
       )
+
     joinedSpeedAndFlowStreams
   }
 }

@@ -127,7 +127,7 @@ class LaneAggregator(settings: BenchmarkSettingsForKafkaStreams) extends Transfo
           val kvStoreIterator = kvStore.all()
           while (kvStoreIterator.hasNext) {
             val entry = kvStoreIterator.next()
-            if (entry.value.publishTimestamp < timestamp - settings.general.publishIntervalMillis - 50) {
+            if (entry.value.publishTimestamp < timestamp - settings.general.publishIntervalMillis - settings.specific.gracePeriodMillis) {
               kvStore.delete(entry.key)
             }
           }
@@ -191,7 +191,7 @@ class RelativeChangeComputer(settings: BenchmarkSettingsForKafkaStreams) extends
           while (kvStoreIterator.hasNext) {
             val entry = kvStoreIterator.next()
             val filteredAggregatedObservationList = entry.value
-              .filter(_.publishTimestamp > context.timestamp() - 50 - settings.general.longWindowLengthMillis)
+              .filter(_.publishTimestamp > context.timestamp()- settings.general.longWindowLengthMillis - settings.specific.gracePeriodMillis )
             if (filteredAggregatedObservationList.isEmpty) {
               kvStore.delete(entry.key)
             } else {
@@ -207,7 +207,7 @@ class RelativeChangeComputer(settings: BenchmarkSettingsForKafkaStreams) extends
 
     override def transform(key: String, value: AggregatableObservation): KeyValue[String, RelativeChangeObservation] = {
       // process the observation if it is newer than the low watermark
-      if (value.publishTimestamp > context.timestamp() - settings.general.publishIntervalMillis - 50) {
+      if (value.publishTimestamp > context.timestamp() - settings.general.publishIntervalMillis - settings.specific.gracePeriodMillis) {
 
         val oldObservations: List[AggregatableObservation] = kvStore.get(key)
 
@@ -219,8 +219,6 @@ class RelativeChangeComputer(settings: BenchmarkSettingsForKafkaStreams) extends
           context.forward(value.measurementId, RelativeChangeObservation(value.measurementId, value.publishTimestamp, value, shortTermChange, longTermChange))
 
           // add the value to the state
-//          val filteredOldObservations = oldObservations
-//            .filter(_.publishTimestamp > context.timestamp() - 50 - settings.general.longWindowLengthMillis)
           val updatedValue = value :: oldObservations
           kvStore.put(key, updatedValue)
 

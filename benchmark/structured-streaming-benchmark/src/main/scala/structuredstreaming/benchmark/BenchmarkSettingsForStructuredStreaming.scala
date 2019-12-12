@@ -30,6 +30,7 @@ class BenchmarkSettingsForStructuredStreaming(overrides: Map[String, String] = M
     val sparkMaster: String = general.configProperties.getString("spark.master")
     val parallelism: Int = sparkProperties.getInt("default.parallelism")
     val sqlShufflePartitions: Int = sparkProperties.getInt("sql.shuffle.partitions")
+    val blockInterval: Int = sparkProperties.getInt("block.interval.millis")
     val sqlMinBatchesToRetain: Int = sparkProperties.getInt("sql.streaming.minBatchesToRetain")
     val backpressureEnabled: Boolean = sparkProperties.getBoolean("streaming.backpressure.enabled")
     val localityWait: Int = sparkProperties.getInt("locality.wait")

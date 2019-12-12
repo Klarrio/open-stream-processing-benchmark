@@ -167,6 +167,7 @@ object StructuredStreamingTrafficAnalyzer {
       .config("spark.sql.streaming.minBatchesToRetain", settings.specific.sqlMinBatchesToRetain)
       .config("spark.streaming.backpressure.enabled", settings.specific.backpressureEnabled)
       .config("spark.locality.wait", settings.specific.localityWait)
+      .config("spark.streaming.blockInterval", settings.specific.blockInterval)
       .config("spark.sql.streaming.checkpointLocation", settings.specific.checkpointDir)
 //      .config("spark.io.compression.codec", "snappy")
       .getOrCreate()
