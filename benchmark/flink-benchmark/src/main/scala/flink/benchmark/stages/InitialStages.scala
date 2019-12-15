@@ -36,46 +36,20 @@ class InitialStages(
     * @param executionEnvironment
     * @return
     */
-  def ingestStage(executionEnvironment: StreamExecutionEnvironment): (DataStream[(String, String, Long)], DataStream[(String, String, Long)]) = {
-    val flowKafkaSource = new FlinkKafkaConsumer[(String, String, Long)](
-      List(settings.general.flowTopic).asJava,
+  def ingestStage(executionEnvironment: StreamExecutionEnvironment): DataStream[(String, String, Long)] = {
+
+    val kafkaSource = new FlinkKafkaConsumer[(String, String, Long)](
+      List(settings.general.speedTopic, settings.general.flowTopic).asJava,
       new RawObservationDeserializer,
       kafkaProperties
     )
 
     if (settings.general.kafkaAutoOffsetReset.contains("earliest"))
-      flowKafkaSource.setStartFromEarliest()
-    else flowKafkaSource.setStartFromLatest()
+      kafkaSource.setStartFromEarliest()
+    else kafkaSource.setStartFromLatest()
 
-    val rawFlowStream = executionEnvironment
-      .addSource(flowKafkaSource)(createTypeInformation[(String, String, Long)])
-      .assignTimestampsAndWatermarks(new AssignerWithPeriodicWatermarks[(String, String, Long)] {
-        var currentMaxTimestamp: Long = _
-
-        override def extractTimestamp(element: (String, String, Long), previousElementTimestamp: Long): Long = {
-          val timestamp = element._3
-          currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp)
-          timestamp
-        }
-
-        override def getCurrentWatermark(): Watermark = {
-          // return the watermark as current highest timestamp minus the out-of-orderness bound
-          new Watermark(currentMaxTimestamp - settings.specific.maxOutOfOrderness)
-        }
-      })
-
-    val speedKafkaSource = new FlinkKafkaConsumer[(String, String, Long)](
-      List(settings.general.speedTopic).asJava,
-      new RawObservationDeserializer,
-      kafkaProperties
-    )
-
-    if (settings.general.kafkaAutoOffsetReset.contains("earliest"))
-      speedKafkaSource.setStartFromEarliest()
-    else speedKafkaSource.setStartFromLatest()
-
-    val rawSpeedStream = executionEnvironment
-      .addSource(speedKafkaSource)(createTypeInformation[(String, String, Long)])
+    val rawStream = executionEnvironment
+      .addSource(kafkaSource)(createTypeInformation[(String, String, Long)])
       .assignTimestampsAndWatermarks(new AssignerWithPeriodicWatermarks[(String, String, Long)] {
         var currentMaxTimestamp: Long = _
 
@@ -92,7 +66,7 @@ class InitialStages(
       })
 
 
-    (rawFlowStream, rawSpeedStream)
+    rawStream
   }
 
 
@@ -102,13 +76,13 @@ class InitialStages(
     * @param executionEnvironment Flink's execution environment
     * @return [[DataStream]] of joined [[FlowObservation]] and [[SpeedObservation]]
     */
-  def parsingStage(rawFlowStream: DataStream[(String, String, Long)], rawSpeedStream: DataStream[(String, String, Long)]): (DataStream[FlowObservation], DataStream[SpeedObservation]) = {
+  def parsingStage(rawStream: DataStream[(String, String, Long)]): (DataStream[FlowObservation], DataStream[SpeedObservation]) = {
 
-    val flowStream = rawFlowStream
+    val flowStream = rawStream.filter(_._2.contains("flow"))
       .map { event: (String, String, Long) =>
         Parsers.parseLineFlowObservation(event._1, event._2, event._3)._2
       }
-    val speedStream = rawSpeedStream
+    val speedStream = rawStream.filter(_._2.contains("speed"))
       .map { event: (String, String, Long) =>
         Parsers.parseLineSpeedObservation(event._1, event._2, event._3)._2
       }

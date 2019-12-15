@@ -64,17 +64,15 @@ object FlinkTrafficAnalyzer {
     initialStages: InitialStages, analyticsStages: AnalyticsStages)
   : Unit = settings.general.lastStage match {
     case UNTIL_INGEST =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
-      rawFlowStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
-      rawSpeedStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
+      val rawStream = initialStages.ingestStage(executionEnvironment)
+      rawStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
-        rawFlowStream.print()
-        rawSpeedStream.print()
+        rawStream.print()
       }
 
     case UNTIL_PARSE =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
+      val rawStream = initialStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = initialStages.parsingStage(rawStream)
       flowStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       speedStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
@@ -83,8 +81,8 @@ object FlinkTrafficAnalyzer {
       }
 
     case UNTIL_JOIN =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
+      val rawStream = initialStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = initialStages.parsingStage(rawStream)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
       joinedSpeedAndFlowStreams.map { r => JsonPrinter.jsonFor(r) }.addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
@@ -92,8 +90,8 @@ object FlinkTrafficAnalyzer {
       }
 
     case UNTIL_TUMBLING_WINDOW =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
+      val rawStream = initialStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = initialStages.parsingStage(rawStream)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
       val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
       aggregateStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
@@ -102,8 +100,8 @@ object FlinkTrafficAnalyzer {
       }
 
     case UNTIL_SLIDING_WINDOW =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
+      val rawStream = initialStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = initialStages.parsingStage(rawStream)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
       val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
       val relativeChangeStream = analyticsStages.relativeChangeStage(aggregateStream)
