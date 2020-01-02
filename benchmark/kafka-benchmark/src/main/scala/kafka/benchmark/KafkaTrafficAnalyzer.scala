@@ -9,6 +9,7 @@
 
 package kafka.benchmark
 
+import java.sql.Timestamp
 import java.util.Properties
 
 import common.benchmark.output.JsonPrinter
@@ -23,6 +24,7 @@ import org.apache.kafka.common.serialization.Serdes
 import org.apache.kafka.streams.kstream._
 import org.apache.kafka.streams.processor.{ProcessorContext, TimestampExtractor}
 import org.apache.kafka.streams.scala._
+import org.apache.kafka.streams.state.{KeyValueStore, StoreBuilder, Stores}
 import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
 import org.slf4j.LoggerFactory
 
@@ -77,6 +79,26 @@ object KafkaTrafficAnalyzer {
     val initialStages = new InitialStages(settings)
     val analyticsStages = new AnalyticsStages(settings)
     val observationFormatter = new ObservationFormatter(settings.specific.jobProfileKey)
+
+    if (settings.specific.useCustomTumblingWindow) {
+      val persistentKeyValueStore: StoreBuilder[KeyValueStore[String, AggregatableObservation]] = Stores
+        .keyValueStoreBuilder(Stores.persistentKeyValueStore("lane-aggregator-state-store"),
+          CustomObjectSerdes.StringSerde,
+          CustomObjectSerdes.AggregatableObservationSerde
+        )
+        .withCachingEnabled()
+      builder.addStateStore(persistentKeyValueStore)
+    }
+
+    if (settings.specific.useCustomSlidingWindow) {
+      val persistentKeyValueStore: StoreBuilder[KeyValueStore[String, List[AggregatableObservation]]] = Stores
+        .keyValueStoreBuilder(Stores.persistentKeyValueStore("relative-change-state-store"),
+          CustomObjectSerdes.StringSerde,
+          CustomObjectSerdes.AggregatedObservationListSerde
+        )
+        .withCachingEnabled()
+      builder.addStateStore(persistentKeyValueStore)
+    }
 
     registerCorrectPartialFlowForRun(settings, builder, observationFormatter, initialStages, analyticsStages)
 
@@ -163,12 +185,11 @@ object KafkaTrafficAnalyzer {
       val joinedSpeedAndFlowStreams = initialStages.joinStage(parsedFlowStream, parsedSpeedStream)
       val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
 
-      aggregateStream.map { (key: Windowed[String], obs: AggregatableObservation) => observationFormatter.pub(obs) }
+      aggregateStream.map { (_: String, obs: AggregatableObservation) => observationFormatter.pub(obs) }
         .to(settings.general.outputTopic)(Produced.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.StringSerde))
 
       if (settings.general.shouldPrintOutput) {
         aggregateStream
-          .selectKey { case obs: (Windowed[String], AggregatableObservation) => obs._2.measurementId }
           .print(Printed.toSysOut())
       }
 
@@ -177,15 +198,15 @@ object KafkaTrafficAnalyzer {
       val (parsedFlowStream, parsedSpeedStream) = initialStages.parsingStage(rawStreams)
       val joinedSpeedAndFlowStreams = initialStages.joinStage(parsedFlowStream, parsedSpeedStream)
       val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
-      val relativeChangeStream = analyticsStages.relativeChangeStage(aggregateStream)
+      val relativeChangeStream: kstream.KStream[String, RelativeChangeObservation] = analyticsStages.relativeChangeStage(aggregateStream)
 
       relativeChangeStream.map { (key: String, obs: RelativeChangeObservation) => observationFormatter.pub(obs) }
         .to(settings.general.outputTopic)(Produced.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.StringSerde))
 
       if (settings.general.shouldPrintOutput) {
-        relativeChangeStream
-          .selectKey { case obs: (String, RelativeChangeObservation) => obs._2.measurementId }
-          .print(Printed.toSysOut())
+        val toPrintStream: kstream.KStream[String, String] = relativeChangeStream
+          .map { (key: String, obs: RelativeChangeObservation) => (new Timestamp(obs.publishTimestamp).toString, obs.toJsonString()) }
+        toPrintStream.print(Printed.toSysOut[String, String]())
       }
   }
 
@@ -205,10 +226,8 @@ object KafkaTrafficAnalyzer {
     streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, settings.specific.numStreamsThreads.toString)
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, settings.specific.commitInterval.toString)
     streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, settings.specific.cacheMaxBytesBuffering.toString)
-    streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, classOf[KafkaAppendTimestampExtractor].getName)
-    if (settings.general.mode.equals(SINGLE_BURST)) {
-      streamsConfiguration.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, "300000")
-    }
+    streamsConfiguration.put(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, settings.specific.maxTaskIdleMillis)
+
     // Producer Config
     streamsConfiguration.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, settings.specific.compressionTypeConfig.toString)
     streamsConfiguration.put(ProducerConfig.BATCH_SIZE_CONFIG, settings.specific.batchSize.toString)
@@ -222,13 +241,6 @@ object KafkaTrafficAnalyzer {
     streamsConfiguration.put(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG, "1000")
 
     streamsConfiguration
-  }
-}
-
-
-class KafkaAppendTimestampExtractor extends TimestampExtractor {
-  override def extract(record: ConsumerRecord[AnyRef, AnyRef], previousTimestamp: Long): Long = {
-    record.timestamp()
   }
 }
 

@@ -34,7 +34,7 @@ lazy val flink = Project(id = "flink-benchmark",
   base = file("flink-benchmark"))
   .dependsOn(common % "compile->compile;test->test")
   .settings(libraryDependencies ++= Dependencies.flinkDependencies,
-    frameworkSettings("Flink", "1.0"))
+    frameworkSettings("Flink", "2.0"))
   .enablePlugins(JavaAppPackaging)
 
 lazy val kafka = Project(id = "kafka-benchmark",
@@ -59,7 +59,7 @@ lazy val kafka = Project(id = "kafka-benchmark",
     "-XX:ConcGCThreads=2",
     "-XX:MaxGCPauseMillis=200") ++*/ jvmOpts,
   dockerExposedPorts := Seq(8500, 8501),
-  frameworkSettings("Kafka", "0.2"))
+  frameworkSettings("Kafka", "2.0"))
   .enablePlugins(JavaAppPackaging)
 
 lazy val spark = Project(id = "spark-benchmark",
@@ -68,7 +68,7 @@ lazy val spark = Project(id = "spark-benchmark",
   .settings(
     libraryDependencies ++= Dependencies.sparkDependencies,
     dependencyOverrides ++= Dependencies.jacksonDependencyOverrides,
-    frameworkSettings("Spark", "1.0"),
+    frameworkSettings("Spark", "2.0"),
     parallelExecution in Test := false)
   .enablePlugins(JavaAppPackaging)
 
@@ -78,7 +78,7 @@ lazy val structuredStreaming = Project(id = "structured-streaming-benchmark",
   .settings(
     libraryDependencies ++= Dependencies.sparkDependencies,
     dependencyOverrides ++= Dependencies.jacksonDependencyOverrides,
-    frameworkSettings("StructuredStreaming", "1.0"))
+    frameworkSettings("StructuredStreaming", "2.0"))
   .enablePlugins(JavaAppPackaging)
 
 def frameworkSettings(framework: String, versionDocker: String) = Seq(

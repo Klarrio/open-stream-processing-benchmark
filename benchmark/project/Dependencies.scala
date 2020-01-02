@@ -14,7 +14,7 @@ object Dependencies {
 
     val dropwizardMetrics = "3.2.2"
 
-    val flink = "1.6.1"
+    val flink = "1.9.1"
     val flinkStreamingContrib = "1.4.2"
     val flinkSpector = "0.5"
 
@@ -33,7 +33,7 @@ object Dependencies {
     val mockito = "1.9.5"
 
     val snakeYaml = "1.17"
-    val spark = "2.3.1"
+    val spark = "2.4.1"
     val sparkTestingBase = "2.4.0_0.11.0"
     val storm = "1.1.1"
     val scalaBinary = "2.11"
@@ -75,9 +75,9 @@ object Dependencies {
     "org.apache.flink" %% s"flink-clients" % Versions.flink,
     "org.apache.flink" % "flink-metrics-dropwizard" % Versions.flink,
     "org.apache.flink" % "flink-metrics-core" % Versions.flink,
-    "org.apache.flink" % "flink-metrics-jmx" % Versions.flink,
+    "org.apache.flink" %% "flink-metrics-jmx" % Versions.flink,
     "org.apache.flink" %% s"flink-runtime" % Versions.flink,
-    "org.apache.flink" %% s"flink-connector-kafka-${Versions.kafkaBinary}" % Versions.flink,
+    "org.apache.flink" %% s"flink-connector-kafka" % Versions.flink,
     "org.apache.flink" % "flink-test-utils_2.11" % Versions.flink % "test",
     "org.apache.flink" % "flink-test-utils-junit" % Versions.flink % "test",
     "org.apache.flink" %% s"flink-streaming-contrib" % Versions.flinkStreamingContrib

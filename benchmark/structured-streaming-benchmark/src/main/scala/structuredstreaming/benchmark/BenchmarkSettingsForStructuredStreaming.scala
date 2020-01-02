@@ -30,10 +30,12 @@ class BenchmarkSettingsForStructuredStreaming(overrides: Map[String, String] = M
     val sparkMaster: String = general.configProperties.getString("spark.master")
     val parallelism: Int = sparkProperties.getInt("default.parallelism")
     val sqlShufflePartitions: Int = sparkProperties.getInt("sql.shuffle.partitions")
+    val blockInterval: Int = sparkProperties.getInt("block.interval.millis")
     val sqlMinBatchesToRetain: Int = sparkProperties.getInt("sql.streaming.minBatchesToRetain")
     val backpressureEnabled: Boolean = sparkProperties.getBoolean("streaming.backpressure.enabled")
     val localityWait: Int = sparkProperties.getInt("locality.wait")
     val watermarkMillis: Long = sparkProperties.getLong("watermark.ms")
+    val useCustomTumblingWindow: Boolean = sparkProperties.getString("tumbling.window") == "custom"
 
     val jobProfileKey: String = general.mkJobProfileKey("structuredstreaming", general.windowSlideIntervalMillis)
   }

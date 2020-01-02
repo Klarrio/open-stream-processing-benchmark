@@ -6,7 +6,7 @@ import java.util.Objects
 
 import common.benchmark._
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
-import play.api.libs.json.{Json, Reads, __}
+import play.api.libs.json._
 
 class FlowSerializer extends Serializer[FlowObservation] {
   override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = {}
@@ -95,8 +95,7 @@ class AggregregationListSerializer extends Serializer[List[AggregatableObservati
   override def close(): Unit = {}
 
   override def serialize(topic: String, data: List[AggregatableObservation]): Array[Byte] = {
-    implicit val aggObservationWriter = Json.writes[AggregatableObservation]
-    Json.toJson(data).toString().getBytes()
+    if (Objects.isNull(data)) null else data.map(_.toJsonString()).mkString("[", ",", "]").getBytes()
   }
 }
 

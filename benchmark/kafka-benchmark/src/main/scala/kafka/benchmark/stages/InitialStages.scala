@@ -33,6 +33,7 @@ class InitialStages(settings: BenchmarkSettingsForKafkaStreams)
     * @return raw speed and flow events
     */
   def ingestStage(builder: StreamsBuilder): KStream[String, String] = {
+    // both topics need to be read in together otherwise the synchronization of bursts goes wrong
     val rawStreams: KStream[String, String] = builder.stream[String, String](Set(settings.general.flowTopic, settings.general.speedTopic))
 
     rawStreams
@@ -100,7 +101,8 @@ class InitialStages(settings: BenchmarkSettingsForKafkaStreams)
     val joinedSpeedAndFlowStreams = parsedFlowStream.join(parsedSpeedStream)({
       (v1: FlowObservation, v2: SpeedObservation) => new AggregatableObservation(v1, v2)
     }, JoinWindows.of(Duration.ofMillis(settings.general.publishIntervalMillis))
-      .grace(Duration.ofMillis(settings.specific.gracePeriodMillis)))(Joined
+      .grace(Duration.ofMillis(settings.specific.gracePeriodMillis))
+      .until(settings.general.publishIntervalMillis + settings.specific.gracePeriodMillis))(Joined
       .`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.FlowObservationSerde, CustomObjectSerdes.SpeedObservationSerde))
 
     joinedSpeedAndFlowStreams

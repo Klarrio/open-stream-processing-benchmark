@@ -1,26 +1,19 @@
 package flink.benchmark.stages
 
 
-import java.text.{DateFormat, SimpleDateFormat}
-
 import common.benchmark._
 import common.benchmark.input.Parsers
 import common.benchmark.stages.InitialStagesTemplate
-import common.config.JobExecutionMode.LATENCY_CONSTANT_RATE
 import flink.benchmark.BenchmarkSettingsForFlink
-import org.apache.flink.configuration.Configuration
-import org.apache.flink.streaming.api.functions.{AssignerWithPeriodicWatermarks, ProcessFunction}
+import org.apache.flink.streaming.api.functions.AssignerWithPeriodicWatermarks
 import org.apache.flink.streaming.api.functions.co.ProcessJoinFunction
-import org.apache.flink.streaming.api.functions.source.RichParallelSourceFunction
-import org.apache.flink.streaming.api.functions.timestamps.{AscendingTimestampExtractor, BoundedOutOfOrdernessTimestampExtractor}
 import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment, _}
-import org.apache.flink.streaming.api.windowing.time.Time
-import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer010
-import org.apache.flink.util.Collector
-import org.apache.flink.streaming.api.scala._
 import org.apache.flink.streaming.api.watermark.Watermark
+import org.apache.flink.streaming.api.windowing.time.Time
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer
+import org.apache.flink.util.Collector
 
-import collection.JavaConverters._
+import scala.collection.JavaConverters._
 
 /**
   * Contains all methods required for parsing and joining the incoming streams
@@ -43,10 +36,10 @@ class InitialStages(
     * @param executionEnvironment
     * @return
     */
-  def ingestStage(executionEnvironment: StreamExecutionEnvironment): DataStream[(String, String, String, Long)] = {
-    val dateFormat: DateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS")
-    val kafkaSource = new FlinkKafkaConsumer010[(String, String, String )](
-      List(settings.general.flowTopic, settings.general.speedTopic).asJava,
+  def ingestStage(executionEnvironment: StreamExecutionEnvironment): DataStream[(String, String, Long)] = {
+
+    val kafkaSource = new FlinkKafkaConsumer[(String, String, Long)](
+      List(settings.general.speedTopic, settings.general.flowTopic).asJava,
       new RawObservationDeserializer,
       kafkaProperties
     )
@@ -55,28 +48,25 @@ class InitialStages(
       kafkaSource.setStartFromEarliest()
     else kafkaSource.setStartFromLatest()
 
-    val streams = executionEnvironment
-      .addSource(kafkaSource)(createTypeInformation[(String, String, String)])
-      .process(new TimestampExtractor)
+    val rawStream = executionEnvironment
+      .addSource(kafkaSource)(createTypeInformation[(String, String, Long)])
+      .assignTimestampsAndWatermarks(new AssignerWithPeriodicWatermarks[(String, String, Long)] {
+        var currentMaxTimestamp: Long = _
+
+        override def extractTimestamp(element: (String, String, Long), previousElementTimestamp: Long): Long = {
+          val timestamp = element._3
+          currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp)
+          timestamp
+        }
+
+        override def getCurrentWatermark(): Watermark = {
+          // return the watermark as current highest timestamp minus the out-of-orderness bound
+          new Watermark(currentMaxTimestamp - settings.specific.maxOutOfOrderness)
+        }
+      })
 
 
-    val streamsWithWatermarks = streams.assignTimestampsAndWatermarks(new AssignerWithPeriodicWatermarks[(String, String, String, Long)] {
-      var currentMaxTimestamp: Long = _
-
-      override def extractTimestamp(element: (String, String, String, Long), previousElementTimestamp: Long): Long = {
-        val timestamp = element._4
-        currentMaxTimestamp = Math.max(timestamp, currentMaxTimestamp)
-        timestamp
-      }
-
-      override def getCurrentWatermark(): Watermark = {
-        // return the watermark as current highest timestamp minus the out-of-orderness bound
-        new Watermark(currentMaxTimestamp - settings.specific.maxOutOfOrderness)
-      }
-    })
-
-
-    streamsWithWatermarks
+    rawStream
   }
 
 
@@ -86,21 +76,15 @@ class InitialStages(
     * @param executionEnvironment Flink's execution environment
     * @return [[DataStream]] of joined [[FlowObservation]] and [[SpeedObservation]]
     */
-  def parsingStage(rawStreams: DataStream[(String, String, String, Long)]): (DataStream[FlowObservation], DataStream[SpeedObservation]) = {
+  def parsingStage(rawStream: DataStream[(String, String, Long)]): (DataStream[FlowObservation], DataStream[SpeedObservation]) = {
 
-    val flowStream = rawStreams
-      .filter { event: (String, String, String, Long) =>
-        event._2.contains("flow")
+    val flowStream = rawStream.filter(_._2.contains("flow"))
+      .map { event: (String, String, Long) =>
+        Parsers.parseLineFlowObservation(event._1, event._2, event._3)._2
       }
-      .map { event: (String, String, String, Long) =>
-        Parsers.parseLineFlowObservation(event._1, event._3, event._4)._2
-      }
-    val speedStream = rawStreams
-      .filter { event: (String, String, String, Long) =>
-        event._2.contains("speed")
-      }
-      .map { event: (String, String, String, Long) =>
-        Parsers.parseLineSpeedObservation(event._1, event._3, event._4)._2
+    val speedStream = rawStream.filter(_._2.contains("speed"))
+      .map { event: (String, String, Long) =>
+        Parsers.parseLineSpeedObservation(event._1, event._2, event._3)._2
       }
 
     (flowStream, speedStream)
@@ -127,49 +111,4 @@ class InitialStages(
 
     joinedStream
   }
-}
-
-
-/**
-  * ProcessFunction: extracts kafka timestamp
-  *
-  */
-class TimestampExtractor extends ProcessFunction[(String, String, String), (String, String, String, Long)] {
-  override def open(parameters: Configuration): Unit = {}
-
-  override def processElement(value: (String, String, String), ctx: ProcessFunction[(String, String, String), (String, String, String, Long)]#Context, out: Collector[(String, String, String, Long)]): Unit = {
-    out.collect((value._1, value._2, value._3, ctx.timestamp()))
-  }
-
-  override def onTimer(timestamp: Long, ctx: ProcessFunction[(String, String, String), (String, String, String, Long)]#OnTimerContext, out: Collector[(String, String, String, Long)]): Unit = {}
-}
-
-/**
-  * ProcessFunction: parses lines to [[SpeedObservation]]
-  *
-  */
-class ParseSpeedObservation extends ProcessFunction[(String, String), SpeedObservation] {
-  override def open(parameters: Configuration): Unit = {}
-
-  override def processElement(value: (String, String), ctx: ProcessFunction[(String, String), SpeedObservation]#Context, out: Collector[SpeedObservation]): Unit = {
-    val (_, speedObservation) = Parsers.parseLineSpeedObservation(value._1, value._2, ctx.timestamp())
-    out.collect(speedObservation)
-  }
-
-  override def onTimer(timestamp: Long, ctx: ProcessFunction[(String, String), SpeedObservation]#OnTimerContext, out: Collector[SpeedObservation]): Unit = {}
-}
-
-/**
-  * ProcessFunction: parses lines to [[FlowObservation]]
-  *
-  */
-class ParseFlowObservation extends ProcessFunction[(String, String), FlowObservation] {
-  override def open(parameters: Configuration): Unit = {}
-
-  override def processElement(value: (String, String), ctx: ProcessFunction[(String, String), FlowObservation]#Context, out: Collector[FlowObservation]): Unit = {
-    val (_, flowObservation) = Parsers.parseLineFlowObservation(value._1, value._2, ctx.timestamp())
-    out.collect(flowObservation)
-  }
-
-  override def onTimer(timestamp: Long, ctx: ProcessFunction[(String, String), FlowObservation]#OnTimerContext, out: Collector[FlowObservation]): Unit = {}
 }
