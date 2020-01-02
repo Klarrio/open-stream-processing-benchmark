@@ -139,13 +139,23 @@ object StructuredStreamingTrafficAnalyzer {
           outputUtils.printToConsole(aggregatedStream, awaitTermination = true)
         } else {
           val outputAggregatedStream = aggregatedStream
-            .withColumn("publishTimestamp", outputUtils.timeUDF($"publishTimestamp"))
             .select(lit(settings.specific.jobProfileKey).as("key"), to_json(struct(aggregatedStream.columns.map(col(_)): _*)).as("value"))
           outputUtils.writeToKafka(outputAggregatedStream, awaitTermination = !settings.general.shouldPrintOutput)
         }
 
       case UNTIL_SLIDING_WINDOW =>
-        logger.error("LAST STAGE 4 NOT ACCEPTED FOR STRUCTURED STREAMING")
+        val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage()
+        val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
+        val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
+        val relativeChangeStream = analyticsStages.customAggregationAndRelativeChangeStage(joinedSpeedAndFlowStreams)
+
+        if (settings.general.shouldPrintOutput) {
+          outputUtils.printToConsole(relativeChangeStream, awaitTermination = true)
+        } else {
+          val outputAggregatedStream = relativeChangeStream
+            .select(lit(settings.specific.jobProfileKey).as("key"), to_json(struct(relativeChangeStream.columns.map(col(_)): _*)).as("value"))
+          outputUtils.writeToKafka(outputAggregatedStream, awaitTermination = !settings.general.shouldPrintOutput)
+        }
     }
   }
 
@@ -169,7 +179,7 @@ object StructuredStreamingTrafficAnalyzer {
       .config("spark.locality.wait", settings.specific.localityWait)
       .config("spark.streaming.blockInterval", settings.specific.blockInterval)
       .config("spark.sql.streaming.checkpointLocation", settings.specific.checkpointDir)
-//      .config("spark.io.compression.codec", "snappy")
+      .config("spark.io.compression.codec", "snappy")
       .getOrCreate()
 
     sparkSession

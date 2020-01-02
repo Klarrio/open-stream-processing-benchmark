@@ -35,6 +35,7 @@ class BenchmarkSettingsForStructuredStreaming(overrides: Map[String, String] = M
     val backpressureEnabled: Boolean = sparkProperties.getBoolean("streaming.backpressure.enabled")
     val localityWait: Int = sparkProperties.getInt("locality.wait")
     val watermarkMillis: Long = sparkProperties.getLong("watermark.ms")
+    val useCustomTumblingWindow: Boolean = sparkProperties.getString("tumbling.window") == "custom"
 
     val jobProfileKey: String = general.mkJobProfileKey("structuredstreaming", general.windowSlideIntervalMillis)
   }
