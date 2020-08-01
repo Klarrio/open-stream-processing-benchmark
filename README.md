@@ -2,7 +2,7 @@
 
 This repository contains the code of the open stream processing benchmark as decribed in the publication:
 
-(van Dongen, G., & Van den Poel, D. (2020). Evaluation of Stream Processing Frameworks. IEEE Transactions on Parallel and Distributed Systems, 31(8), 1845-1858.)[https://ieeexplore.ieee.org/abstract/document/9025240]
+[van Dongen, G., & Van den Poel, D. (2020). Evaluation of Stream Processing Frameworks. IEEE Transactions on Parallel and Distributed Systems, 31(8), 1845-1858.](https://ieeexplore.ieee.org/abstract/document/9025240)
 
 
 It includes both the data stream generator to run the benchmark and the benchmarking code itself.
