@@ -13,7 +13,7 @@ Currently the benchmark includes Apache Spark (Spark Streaming and Structured St
 This repository contains code for benchmarking Stream Processing frameworks. Four frameworks were included being Spark Streaming, Structured Streaming, Flink and Kafka Streams.
 A pipeline of common IoT operations has been implemented:
 
-<img src="./docs/images/processing_flow.png" alt="processing_flow" width="500" height="150"/>
+<img src="./benchmark/docs/images/processing_flow.png" alt="processing_flow" width="500" height="150"/>
 
 The data-stream-generator publishes a configurable volume of data onto two Kafka topics (ndwflow and ndwspeed). The default volume of the data stream is 760 messages per second (380 messages per topic) which equals to 1 368 000 messages per 30 minutes.
 
