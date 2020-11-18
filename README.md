@@ -1,15 +1,6 @@
 # Open stream processing benchmark
 
-This repository contains the code of the open stream processing benchmark as decribed in the publication:
-
-[van Dongen, G., & Van den Poel, D. (2020). Evaluation of Stream Processing Frameworks. IEEE Transactions on Parallel and Distributed Systems, 31(8), 1845-1858.](https://ieeexplore.ieee.org/abstract/document/9025240)
-
-The Supplemental Material of this paper can be found [here](https://s3.amazonaws.com/ieeecs.cdn.csdl.public/trans/td/2020/08/extras/ttd202008-09025240s1-supp1-2978480.pdf).
-
-Earlier work-in-progress publication:
-
-[van Dongen, G., Steurtewagen, B., & Van den Poel, D. (2018, July). Latency measurement of fine-grained operations in benchmarking distributed stream processing frameworks. In 2018 IEEE International Congress on Big Data (BigData Congress) (pp. 247-250). IEEE.](https://ieeexplore.ieee.org/document/8457759)
-
+This repository contains the code of the open stream processing benchmark.
 
 It includes both the data stream generator to run the benchmark and the benchmarking code itself.
 
@@ -105,5 +96,13 @@ Go to the project you want to run:
 
     run
 
+## References and Publications
+- [van Dongen, G., & Van den Poel, D. (2020). Evaluation of Stream Processing Frameworks. IEEE Transactions on Parallel and Distributed Systems, 31(8), 1845-1858.](https://ieeexplore.ieee.org/abstract/document/9025240)
+The Supplemental Material of this paper can be found [here](https://s3.amazonaws.com/ieeecs.cdn.csdl.public/trans/td/2020/08/extras/ttd202008-09025240s1-supp1-2978480.pdf).
 
+- Earlier work-in-progress publication:
+[van Dongen, G., Steurtewagen, B., & Van den Poel, D. (2018, July). Latency measurement of fine-grained operations in benchmarking distributed stream processing frameworks. In 2018 IEEE International Congress on Big Data (BigData Congress) (pp. 247-250). IEEE.](https://ieeexplore.ieee.org/document/8457759)
 
+Talks related to this publication: 
+
+- Spark Summit Europe 2019: [Stream Processing: Choosing the Right Tool for the Job - Giselle van Dongen](https://www.youtube.com/watch?v=PiEQR9AXgl4&t=2s)
