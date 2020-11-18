@@ -3,10 +3,12 @@
 This repository contains the code of the open stream processing benchmark as decribed in the publication:
 
 [van Dongen, G., & Van den Poel, D. (2020). Evaluation of Stream Processing Frameworks. IEEE Transactions on Parallel and Distributed Systems, 31(8), 1845-1858.](https://ieeexplore.ieee.org/abstract/document/9025240)
-Supplemental material: 
 
-Work-in-progress publication
-[G. van Dongen, B. Steurtewagen and D. Van den Poel,  "Latency Measurement of Fine-Grained Operations in Benchmarking Distributed Stream Processing Frameworks," in 2018 IEEE International Congress on Big Data (BigData Congress), San Francisco, CA, USA, 2018 pp. 247-250.](https://ieeexplore.ieee.org/document/8457759)
+The Supplemental Material of this paper can be found [here](https://s3.amazonaws.com/ieeecs.cdn.csdl.public/trans/td/2020/08/extras/ttd202008-09025240s1-supp1-2978480.pdf).
+
+Earlier work-in-progress publication:
+
+[van Dongen, G., Steurtewagen, B., & Van den Poel, D. (2018, July). Latency measurement of fine-grained operations in benchmarking distributed stream processing frameworks. In 2018 IEEE International Congress on Big Data (BigData Congress) (pp. 247-250). IEEE.](https://ieeexplore.ieee.org/document/8457759)
 
 
 It includes both the data stream generator to run the benchmark and the benchmarking code itself.
