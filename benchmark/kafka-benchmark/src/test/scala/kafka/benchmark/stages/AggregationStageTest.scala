@@ -1,11 +1,10 @@
-package kafka.benchmark.phases
+package kafka.benchmark.stages
 
 import java.util.Properties
 
-import common.benchmark.output.{AggregatableObservationDeserializer, AggregatableObservationSerializer, RelativeChangeDeserializer}
-import common.benchmark.{AggregatableObservation, RelativeChangeObservation}
+import common.benchmark.AggregatableObservation
 import common.utils.TestObservations
-import kafka.benchmark.stages.{AnalyticsStages, CustomObjectSerdes}
+import kafka.benchmark.stages.{AggregatableObservationDeserializer, AggregatableObservationSerializer, CustomObjectSerdes, StatefulStages}
 import kafka.benchmark.{BenchmarkSettingsForKafkaStreams, KafkaTrafficAnalyzer}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.streams.TopologyTestDriver
@@ -13,12 +12,12 @@ import org.apache.kafka.streams.kstream._
 import org.apache.kafka.streams.scala.StreamsBuilder
 import org.apache.kafka.streams.scala.kstream.Consumed
 import org.apache.kafka.streams.state.{KeyValueStore, StoreBuilder, Stores}
-import org.apache.kafka.streams.test.ConsumerRecordFactory
-import org.scalatest._
+import org.scalatest.{BeforeAndAfter, FlatSpec, FunSuite, Matchers}
 
-class AggregationStageTest extends FunSuite {
+import collection.JavaConverters._
+
+class AggregationStageTest extends FlatSpec with Matchers with BeforeAndAfter {
   val settings: BenchmarkSettingsForKafkaStreams = new BenchmarkSettingsForKafkaStreams
-
   val props: Properties = KafkaTrafficAnalyzer.initKafka(settings)
   val builder = new StreamsBuilder()
 
@@ -27,43 +26,41 @@ class AggregationStageTest extends FunSuite {
       CustomObjectSerdes.StringSerde,
       CustomObjectSerdes.AggregatableObservationSerde
     )
-  builder.addStateStore(persistentKeyValueStore)
 
-  val analyticsStages = new AnalyticsStages(settings)
+  val statefulStages = new StatefulStages(settings)
 
-  test("test aggregation utils") {
+  val expectedOutput: Seq[AggregatableObservation] = TestObservations.observationsAfterAggregationStage.flatten
+    .sortBy { f: AggregatableObservation => (f.measurementId, f.publishTimestamp) }
 
+  "aggregation stage" should " produce correct output" in {
+
+    builder.addStateStore(persistentKeyValueStore)
     val inputStream = builder.stream("input-topic")(Consumed.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.AggregatableObservationSerde))
 
-    analyticsStages.aggregationStage(inputStream)
+    statefulStages.aggregationAfterJoinStage(inputStream)
       .selectKey { case obs: (Windowed[String], AggregatableObservation) => obs._2.measurementId }
       .to("output-topic")(Produced.`with`(CustomObjectSerdes.StringSerde, CustomObjectSerdes.AggregatableObservationSerde))
 
     val topology = builder.build()
     val topologyTestDriver = new TopologyTestDriver(topology, props)
-    val recordFactory: ConsumerRecordFactory[String, AggregatableObservation] = new ConsumerRecordFactory[String, AggregatableObservation]("input-topic", new StringSerializer, new AggregatableObservationSerializer)
 
-    var myOutput: List[AggregatableObservation] = List()
-    TestObservations.observationsAfterJoinPhase.foreach { next =>
+    val inputTopic = topologyTestDriver.createInputTopic[String, AggregatableObservation]("input-topic", new StringSerializer, new AggregatableObservationSerializer)
+    val outputTopic = topologyTestDriver.createOutputTopic[String, AggregatableObservation]("output-topic", new StringDeserializer, new AggregatableObservationDeserializer)
+
+    TestObservations.observationsAfterJoinStage.foreach { next =>
       next.groupBy(_._2._1.measurementId).foreach { observationsOfMeasurementId =>
         observationsOfMeasurementId._2.foreach{ obs =>
           new AggregatableObservation(obs._2._1, obs._2._2)
-          val cr = recordFactory.create("input-topic", obs._1, new AggregatableObservation(obs._2._1, obs._2._2), obs._2._1.timestamp)
-          topologyTestDriver.pipeInput(cr)
+          inputTopic.pipeInput(obs._1, new AggregatableObservation(obs._2._1, obs._2._2))
         }
-      val outputRecord = topologyTestDriver.readOutput("output-topic", new StringDeserializer, new AggregatableObservationDeserializer)
-      myOutput = myOutput.:+(outputRecord.value())
       }
     }
 
-    val expected = TestObservations.observationsAfterAggregationPhase.flatten
-      .sortBy { f: AggregatableObservation => (f.measurementId, f.timestamp) }
-    val myOutputList = myOutput
-      .sortBy { f: AggregatableObservation => (f.measurementId, f.timestamp) }
+    val myOutput = outputTopic.readValuesToList().asScala
+      .sortBy { f: AggregatableObservation => (f.measurementId, f.publishTimestamp) }
 
-    myOutputList.foreach(println)
-    assert(expected == myOutputList)
+    myOutput.foreach(println)
+    myOutput should contain allElementsOf expectedOutput
     topologyTestDriver.close()
   }
 }
-

@@ -12,16 +12,15 @@ package spark.benchmark
 import java.io.Serializable
 
 import common.benchmark._
-import common.config.LastStage
 import common.config.LastStage._
-import common.benchmark.output.{JsonPrinter, KafkaSinkForSparkAndStorm}
+import common.benchmark.output.JsonPrinter
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.spark.SparkConf
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.streaming.dstream.DStream
 import org.apache.spark.streaming.{Milliseconds, StreamingContext}
-import spark.benchmark.stages.{AnalyticsStages, InitialStages}
+import spark.benchmark.stages.{StatefulStages, StatelessStages, KafkaSinkForSpark}
 
 object SparkTrafficAnalyzer {
 
@@ -50,7 +49,6 @@ object SparkTrafficAnalyzer {
   }
 
 
-
   /**
    * Executes general application skeleton
    *
@@ -70,98 +68,134 @@ object SparkTrafficAnalyzer {
 
     val kafkaParams = initKafka(settings)
 
-    val kafkaSink: Broadcast[KafkaSinkForSparkAndStorm] = sparkSession.sparkContext.broadcast(KafkaSinkForSparkAndStorm(settings.general.kafkaBootstrapServers, settings.general.outputTopic, settings.specific.jobProfileKey))
+    val kafkaSink: Broadcast[KafkaSinkForSpark] = sparkSession.sparkContext.broadcast(KafkaSinkForSpark(settings.general.kafkaBootstrapServers, settings.general.outputTopic))
 
-    val parseAndJoinUtils = new InitialStages(settings, kafkaParams)
-    val aggregationAndWindowUtils = new AnalyticsStages(settings)
-    val obsPublisher = new ObservationPublisher(kafkaSink)
-    
-    registerCorrectPartialFlowForRun(settings, ssc, obsPublisher, parseAndJoinUtils, aggregationAndWindowUtils)
+    val statelessStages = new StatelessStages(settings, kafkaParams)
+    val statefulStages = new StatefulStages(settings)
+
+    registerCorrectPartialFlowForRun(settings, ssc, kafkaSink, statelessStages, statefulStages)
 
     ssc.checkpoint(settings.specific.checkpointDir)
     ssc.start()
     ssc.awaitTerminationOrTimeout(60000)
   }
 
-
-  class ObservationPublisher(kafkaSink: Broadcast[KafkaSinkForSparkAndStorm]) extends Serializable {
-    def pub(rawInputRecord: (String, String, String, Long)) = kafkaSink.value.send(JsonPrinter.jsonFor(rawInputRecord ))
-    def pub(obs: FlowObservation) = kafkaSink.value.send(JsonPrinter.jsonFor(obs))
-    def pub(obs: SpeedObservation) = kafkaSink.value.send(JsonPrinter.jsonFor(obs))
-    def pub(obs: AggregatableObservation) = kafkaSink.value.send(JsonPrinter.jsonFor(obs))
-    def pub(obs: RelativeChangeObservation) = kafkaSink.value.send(JsonPrinter.jsonFor(obs))
-  }
-
   def registerCorrectPartialFlowForRun(settings: BenchmarkSettingsForSpark,
-    ssc: StreamingContext, toKafkaPublisher: ObservationPublisher,
-    initialStages: InitialStages, aggregationAndWindowUtils: AnalyticsStages)
-    : Unit = settings.general.lastStage match {
+    ssc: StreamingContext, kafkaSink: Broadcast[KafkaSinkForSpark],
+    statelessStages: StatelessStages, statefulStages: StatefulStages)
+  : Unit = settings.general.lastStage match {
 
     case UNTIL_INGEST =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(ssc)
-      rawFlowStream.foreachRDD { rdd => rdd.foreach { r => toKafkaPublisher.pub(r) } }
-      rawSpeedStream.foreachRDD { rdd => rdd.foreach { r => toKafkaPublisher.pub(r) } }
+      val (rawFlowStream, rawSpeedStream) = statelessStages.ingestStage(ssc)
+      rawFlowStream.foreachRDD { rdd => rdd.foreach { r => kafkaSink.value.send(JsonPrinter.jsonFor(r, settings.specific.jobProfileKey)) } }
+      rawSpeedStream.foreachRDD { rdd => rdd.foreach { r => kafkaSink.value.send(JsonPrinter.jsonFor(r, settings.specific.jobProfileKey)) } }
       if (settings.general.shouldPrintOutput) {
         rawFlowStream.print()
         rawSpeedStream.print()
       }
 
     case UNTIL_PARSE =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(ssc)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
+      val (rawFlowStream, rawSpeedStream) = statelessStages.ingestStage(ssc)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawFlowStream, rawSpeedStream)
 
-      flowStream.foreachRDD { rdd => rdd.foreach { case (key: String, obs: FlowObservation) =>
-        toKafkaPublisher.pub(obs) } }
-      speedStream.foreachRDD { rdd => rdd.foreach { case (key: String, obs: SpeedObservation) =>
-        toKafkaPublisher.pub(obs) } }
+      flowStream.foreachRDD { rdd =>
+        rdd.foreach { case (key: String, obs: FlowObservation) =>
+          kafkaSink.value.send(JsonPrinter.jsonFor(obs))
+        }
+      }
+      speedStream.foreachRDD { rdd =>
+        rdd.foreach { case (key: String, obs: SpeedObservation) =>
+          kafkaSink.value.send(JsonPrinter.jsonFor(obs))
+        }
+      }
       if (settings.general.shouldPrintOutput) {
         flowStream.print()
         speedStream.print()
       }
 
     case UNTIL_JOIN =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(ssc)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
-      val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
+      val (rawFlowStream, rawSpeedStream) = statelessStages.ingestStage(ssc)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawFlowStream, rawSpeedStream)
+      val joinedSpeedAndFlowStreams = statefulStages.joinStage(flowStream, speedStream)
 
-      joinedSpeedAndFlowStreams.foreachRDD { rdd => rdd.foreach { case (key: String, (flow: FlowObservation, speed: SpeedObservation)) =>
-            val obs = new AggregatableObservation(flow, speed)
-            toKafkaPublisher.pub(obs) } }
+      joinedSpeedAndFlowStreams.foreachRDD { rdd =>
+        rdd.foreach { case (key: String, (flow: FlowObservation, speed: SpeedObservation)) =>
+          val obs = new AggregatableObservation(flow, speed)
+          kafkaSink.value.send(JsonPrinter.jsonFor(obs))
+        }
+      }
       if (settings.general.shouldPrintOutput) {
         joinedSpeedAndFlowStreams.print()
       }
 
     case UNTIL_TUMBLING_WINDOW =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(ssc)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
-      val joinedSpeedAndFlowStreams: DStream[(String, (FlowObservation, SpeedObservation))] = initialStages.joinStage(flowStream, speedStream)
-      val aggregateStream: DStream[AggregatableObservation] = aggregationAndWindowUtils.aggregationStage(joinedSpeedAndFlowStreams)
+      val (rawFlowStream, rawSpeedStream) = statelessStages.ingestStage(ssc)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawFlowStream, rawSpeedStream)
+      val joinedSpeedAndFlowStreams: DStream[(String, (FlowObservation, SpeedObservation))] = statefulStages.joinStage(flowStream, speedStream)
+      val aggregateStream: DStream[AggregatableObservation] = statefulStages.aggregationAfterJoinStage(joinedSpeedAndFlowStreams)
 
-      aggregateStream.foreachRDD { rdd => rdd.foreach { obs =>
-        toKafkaPublisher.pub(obs) } }
+      aggregateStream.foreachRDD { rdd =>
+        rdd.foreach { obs =>
+          kafkaSink.value.send(JsonPrinter.jsonFor(obs))
+        }
+      }
 
       if (settings.general.shouldPrintOutput) {
         aggregateStream.print()
       }
 
     case UNTIL_SLIDING_WINDOW =>
-      val (rawFlowStream, rawSpeedStream) = initialStages.ingestStage(ssc)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawFlowStream, rawSpeedStream)
-      val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
-      val aggregateStream = aggregationAndWindowUtils.aggregationStage(joinedSpeedAndFlowStreams)
-      val relativeChangeStream = aggregationAndWindowUtils.relativeChangesStage(aggregateStream)
+      val (rawFlowStream, rawSpeedStream) = statelessStages.ingestStage(ssc)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawFlowStream, rawSpeedStream)
+      val joinedSpeedAndFlowStreams = statefulStages.joinStage(flowStream, speedStream)
+      val aggregateStream = statefulStages.aggregationAfterJoinStage(joinedSpeedAndFlowStreams)
+      val relativeChangeStream = statefulStages.slidingWindowAfterAggregationStage(aggregateStream)
 
-      relativeChangeStream.foreachRDD { rdd => rdd.foreach { obs =>
-        toKafkaPublisher.pub(obs) } }
+      relativeChangeStream.foreachRDD { rdd =>
+        rdd.foreach { obs =>
+          kafkaSink.value.send(JsonPrinter.jsonFor(obs))
+        }
+      }
 
-      if (settings.general.shouldPrintOutput) relativeChangeStream.print()
+      if (settings.general.shouldPrintOutput) {
+        relativeChangeStream.print()
+      }
 
+    case REDUCE_WINDOW_WITHOUT_JOIN =>
+      val rawFlowStream = statelessStages.ingestFlowStreamStage(ssc)
+      val flowStream = statelessStages.parsingFlowStreamStage(rawFlowStream)
+      val aggregatedFlowStream = statefulStages.reduceWindowAfterParsingStage(flowStream)
+
+      aggregatedFlowStream.foreachRDD { rdd =>
+        rdd.foreach { obs =>
+          kafkaSink.value.send(JsonPrinter.jsonFor(obs._2))
+        }
+      }
+
+      if (settings.general.shouldPrintOutput) {
+        aggregatedFlowStream.print()
+      }
+
+    case NON_INCREMENTAL_WINDOW_WITHOUT_JOIN =>
+      val rawFlowStream = statelessStages.ingestFlowStreamStage(ssc)
+      val flowStream = statelessStages.parsingFlowStreamStage(rawFlowStream)
+      val aggregatedFlowStream = statefulStages.nonIncrementalWindowAfterParsingStage(flowStream)
+
+      aggregatedFlowStream.foreachRDD { rdd =>
+        rdd.foreach { obs =>
+          kafkaSink.value.send(JsonPrinter.jsonFor(obs._2))
+        }
+      }
+
+      if (settings.general.shouldPrintOutput) {
+        aggregatedFlowStream.print()
+      }
   }
 
   /**
    * Initializes Spark
    *
-   * @param sparkConfig Spark configuration properties
+   * @param settings Spark configuration properties
    * @return Spark session and streaming context
    */
   def initSpark(settings: BenchmarkSettingsForSpark): (SparkSession, StreamingContext) = {
@@ -169,16 +203,13 @@ object SparkTrafficAnalyzer {
       .master(settings.specific.sparkMaster)
       .appName("spark-streaming-benchmark" + System.currentTimeMillis())
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-      .config("spark.kryo.registrationRequired", "true")
+//      .config("spark.kryo.registrationRequired", "true")
       .config(getKryoConfig)
-      .config("spark.default.parallelism", settings.specific.parallelism)
-      .config("spark.sql.shuffle.partitions", settings.specific.sqlShufflePartitions)
-      .config("spark.sql.streaming.minBatchesToRetain", settings.specific.sqlMinBatchesToRetain)
-      .config("spark.streaming.backpressure.enabled", settings.specific.backpressureEnabled)
+      .config("spark.streaming.receiver.writeAheadLog.enable", settings.specific.writeAheadLogEnabled)
       .config("spark.locality.wait", settings.specific.localityWait)
       .config("spark.streaming.blockInterval", settings.specific.blockInterval)
+      .config("spark.sql.streaming.minBatchesToRetain", 2)
       .getOrCreate()
-
 
     val ssc = new StreamingContext(sparkSession.sparkContext, Milliseconds(settings.specific.batchInterval))
     (sparkSession, ssc)
@@ -187,7 +218,7 @@ object SparkTrafficAnalyzer {
   /**
    * Initializes Kafka
    *
-   * @param sparkConfig Spark configuration properties
+   * @param settings Spark configuration properties
    * @return [[Map]] containing Kafka configuration properties
    */
   def initKafka(settings: BenchmarkSettingsForSpark): Map[String, Object] = {
@@ -199,7 +230,7 @@ object SparkTrafficAnalyzer {
       "value.deserializer" -> classOf[StringDeserializer],
       "group.id" -> timeToString,
       "auto.offset.reset" -> settings.general.kafkaAutoOffsetReset,
-      "enable.auto.commit" -> (false: java.lang.Boolean)
+      "enable.auto.commit" -> Boolean.box(true)
     )
   }
 
@@ -212,8 +243,8 @@ object SparkTrafficAnalyzer {
         classOf[Array[common.benchmark.AggregatableObservation]],
         classOf[AggregatableObservation],
         classOf[RelativeChangeObservation],
-        classOf[KafkaSinkForSparkAndStorm],
-        classOf[common.benchmark.output.KafkaSinkForSparkAndStorm$$anonfun$1],
+        classOf[KafkaSinkForSpark],
+        classOf[spark.benchmark.stages.KafkaSinkForSpark],
         classOf[Array[common.benchmark.RelativeChangeObservation]],
         classOf[scala.collection.mutable.WrappedArray$ofRef]
       )

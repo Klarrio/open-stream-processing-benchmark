@@ -1,19 +1,20 @@
-package common.benchmark.output
+package spark.benchmark.stages
 
 import java.util.Properties
 
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.serialization.StringSerializer
 
-class KafkaSinkForSparkAndStorm(producerFactory: () => KafkaProducer[String, String], topic: String, jobProfileKey: String) extends Serializable {
+class KafkaSinkForSpark(producerFactory: () => KafkaProducer[String, String], topic: String) extends Serializable {
   lazy val producerForThisExecutor = producerFactory()
 
-  def send( observation: String) = producerForThisExecutor.send(new ProducerRecord(topic, jobProfileKey, observation))
+  def send( observation: (String,String)) =
+    producerForThisExecutor.send(new ProducerRecord(topic, observation._1, observation._2))
 
 }
 
-object KafkaSinkForSparkAndStorm {
-  def apply(bootstrapServers: String, outputTopic: String, jobProfileKey: String): KafkaSinkForSparkAndStorm = {
+object KafkaSinkForSpark {
+  def apply(bootstrapServers: String, outputTopic: String): KafkaSinkForSpark = {
     val producerFactory = () => {
       val kafkaProperties = new Properties()
       kafkaProperties.setProperty("bootstrap.servers", bootstrapServers)
@@ -23,6 +24,6 @@ object KafkaSinkForSparkAndStorm {
       }
       producer
     }
-    new KafkaSinkForSparkAndStorm(producerFactory, outputTopic, jobProfileKey: String)
+    new KafkaSinkForSpark(producerFactory, outputTopic)
   }
 }

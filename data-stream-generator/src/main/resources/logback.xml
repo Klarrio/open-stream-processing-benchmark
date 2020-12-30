@@ -5,9 +5,9 @@
         </encoder>
     </appender>
 
-    <logger name="kafka.server" level="INFO"/>
-    <logger name="org.jmxtrans.embedded" level="info" />
-    <logger name="deng" level="INFO"/>
+    <logger name="kafka.server" level="WARN"/>
+    <logger name="org.jmxtrans.embedded" level="WARN" />
+    <logger name="deng" level="WARN"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT" />

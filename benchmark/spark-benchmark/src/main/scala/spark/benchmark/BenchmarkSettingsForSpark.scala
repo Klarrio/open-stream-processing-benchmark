@@ -3,6 +3,7 @@ package spark.benchmark
 import com.typesafe.config.{Config, ConfigFactory}
 import common.config.GeneralConfig
 import common.config.JobExecutionMode.{CONSTANT_RATE, LATENCY_CONSTANT_RATE}
+import common.config.LastStage.{NON_INCREMENTAL_WINDOW_WITHOUT_JOIN, REDUCE_WINDOW_WITHOUT_JOIN}
 
 import scala.collection.JavaConverters._
 
@@ -14,7 +15,7 @@ object BenchmarkSettingsForSpark {
 
 }
 
-class BenchmarkSettingsForSpark(overrides: Map[String, String] = Map()) extends Serializable {
+class BenchmarkSettingsForSpark(overrides: Map[String, Any] = Map()) extends Serializable {
 
   val general = new GeneralConfig(overrides)
 
@@ -29,16 +30,17 @@ class BenchmarkSettingsForSpark(overrides: Map[String, String] = Map()) extends 
     else "hdfs://" + general.hdfsActiveNameNode + "/checkpointDirStructured" + System.currentTimeMillis() + "/"
 
     val sparkMaster: String = general.configProperties.getString("spark.master")
+
     val batchInterval: Int = if (general.lastStage.value < 2 & general.mode.equals(LATENCY_CONSTANT_RATE)) 200
-    else if (general.mode.equals(CONSTANT_RATE)) sparkProperties.getInt("streaming.batchInterval")
-    else general.windowSlideIntervalMillis
-    val parallelism: Int = sparkProperties.getInt("default.parallelism")
-    val blockInterval: Int = math.max(batchInterval/parallelism, 50)
-    val sqlShufflePartitions: Int = sparkProperties.getInt("sql.shuffle.partitions")
-    val sqlMinBatchesToRetain: Int = sparkProperties.getInt("sql.streaming.minBatchesToRetain")
-    val backpressureEnabled: Boolean = sparkProperties.getBoolean("streaming.backpressure.enabled")
+    else if (general.lastStage == REDUCE_WINDOW_WITHOUT_JOIN || general.lastStage == NON_INCREMENTAL_WINDOW_WITHOUT_JOIN) general.slideDurationMsOfWindowAfterParse
+    else 1000
+
+    val defaultParallelism: Int = general.configProperties.getInt("spark.default.parallelism")
+    val sqlShufflePartitions: Int = general.configProperties.getInt("spark.sql.shuffle.partitions")
+    val blockInterval: Int = Math.min(batchInterval/defaultParallelism, 50)
     val localityWait: Int = sparkProperties.getInt("locality.wait")
+    val sqlMinBatchesToRetain: Int = sparkProperties.getInt("sql.streaming.minBatchesToRetain")
+    val writeAheadLogEnabled: Boolean = sparkProperties.getBoolean("spark.streaming.receiver.writeAheadLog.enable")
     val jobProfileKey: String = general.mkJobProfileKey("spark", batchInterval)
   }
-
 }

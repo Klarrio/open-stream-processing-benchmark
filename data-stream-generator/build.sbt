@@ -1,39 +1,35 @@
 import sbt.Keys.javaOptions
 
-name := "data-stream-generator"
+name := "ndw-publisher"
 
-version := "1.0"
+version := "3.0"
 
 scalaVersion := "2.11.8"
-
+dockerBaseImage := "openjdk:8-jdk"
 val extJvmOpts = Seq(
-  "-Xmx6g",
-  "-Xms6g",
-  "-XX:ParallelGCThreads=8 ",
-  "-XX:+UseConcMarkSweepGC"
+	"-J-Xmx5g",
+	"-J-Xms5g"
 )
 
 libraryDependencies ++= Dependencies.rootDependencies
 
 assemblyMergeStrategy in assembly := {
-  case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
-  case _ => MergeStrategy.first
+	case PathList("META-INF", "MANIFEST.MF") => MergeStrategy.discard
+	case _ => MergeStrategy.first
 }
-mainClass in assembly := Some("ingest.LocalStreamProducer")
-mainClass in(Compile, run) := Some("ingest.LocalStreamProducer")
+mainClass in assembly := Some("ingest.StreamProducer")
+mainClass in(Compile, run) := Some("ingest.StreamProducer")
 
 // JVM options
-javaOptions in Universal ++= extJvmOpts.map(opt => s"-J$opt")
+javaOptions in Universal ++= extJvmOpts
 javaOptions in Test ++= extJvmOpts
 // Docker configs
-javaOptions in Docker ++= extJvmOpts.map(opt => s"-J$opt")
-packageName in Docker := "data-stream-generator"
+javaOptions in Docker ++= extJvmOpts
+packageName in Docker := "344178916407.dkr.ecr.eu-central-1.amazonaws.com/ndw-publisher"
 maintainer in Docker := "Giselle van Dongen <giselle.vandongen@klarrio.com>"
-packageSummary in Docker := "Stream producer for Open Stream Processing Benchmark"
-packageDescription := "data-stream-generator"
-
+packageSummary in Docker := "Stream producer for NDW traffic information stream"
+packageDescription := "ndw-publisher"
 
 enablePlugins(JavaAppPackaging)
-
 
 

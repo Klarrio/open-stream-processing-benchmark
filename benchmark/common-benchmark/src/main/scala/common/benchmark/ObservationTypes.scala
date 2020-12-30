@@ -2,63 +2,44 @@ package common.benchmark
 
 import java.sql.Timestamp
 
-import play.api.libs.json.{Json, Reads, Writes, __}
-import play.api.libs.functional.syntax._
+import common.benchmark.input.Parsers
 import common.benchmark.input.Parsers.checkConsistentLanes
-import play.api.libs.functional.syntax.unlift
-
-trait Observation {
-  def toJsonString(): String = {""}
-}
 
 final case class FlowObservation(
   measurementId: String,
   internalId: String,
-  timestamp: Long,
+  publishTimestamp: Long,
   latitude: Double,
   longitude: Double,
   flow: Int,
   period: Int,
   accuracy: Int,
   numLanes: Int,
-  publishTimestamp: Long,
-  ingestTimestamp: Long
-) extends Observation with Serializable {
+  jobProfile: String
+) extends Serializable {
 
-  def this() = this("String", "String", 1L, 1.0, 1.0, 1, 1, 1, 1, 1L, 1L)
-
-  override def toJsonString(): String = {
-    implicit val NewFlowObservationWriter = Json.writes[FlowObservation]
-    Json.toJson(this).toString()
-  }
+  val roundedTimestamp = Parsers.roundMillisToSeconds(publishTimestamp)
 }
 
 final case class SpeedObservation(
   measurementId: String,
   internalId: String,
-  timestamp: Long,
+  publishTimestamp: Long,
   latitude: Double,
   longitude: Double,
   speed: Double,
   accuracy: Int,
   numLanes: Int,
-  publishTimestamp: Long,
-  ingestTimestamp: Long
-) extends Observation with Serializable {
+  jobProfile: String
+) extends Serializable {
 
-  def this() = this("String", "String", 1L, 1.0, 1.0, 1, 1, 1, 1L, 1L)
-
-  override def toJsonString(): String = {
-    implicit val NewSpeedObservationWriter = Json.writes[SpeedObservation]
-    Json.toJson(this).toString()
-  }
-
+  val roundedTimestamp = Parsers.roundMillisToSeconds(publishTimestamp)
 }
 
 case class AggregatableObservation(
   measurementId: String,
   lanes: List[String],
-  timestamp: Long,
+  publishTimestamp: Long,
   latitude: Double,
   longitude: Double,
   accumulatedFlow: Int,
@@ -67,18 +48,16 @@ case class AggregatableObservation(
   averageSpeed: Double,
   speedAccuracy: Int,
   numLanes: Int,
-  publishTimestamp: Long,
-  ingestTimestamp: Long
-) extends Serializable with Observation {
+  jobProfile: String
+) extends Serializable {
 
-  //If you want to create an aggregate observation from a flow object and speed object
-  def this() = this("String", List("String"), 1L, 1.0, 1.0, 1, 1, 1, 1.0, 1, 1, 1l, 1l)
+  val roundedTimestamp = Parsers.roundMillisToSeconds(publishTimestamp)
 
   def this(flow: FlowObservation, speed: SpeedObservation) {
     this(
       flow.measurementId,
       List(flow.internalId),
-      Math.max(flow.timestamp, speed.timestamp),
+      Math.max(flow.publishTimestamp, speed.publishTimestamp),
       flow.latitude,
       flow.longitude,
       flow.flow,
@@ -87,29 +66,20 @@ case class AggregatableObservation(
       speed.speed,
       speed.accuracy,
       checkConsistentLanes(flow.numLanes, speed.numLanes),
-      Math.max(flow.publishTimestamp, speed.publishTimestamp),
-      Math.max(flow.ingestTimestamp, speed.ingestTimestamp)
+      flow.jobProfile
     )
-
-  }
-
-  override def toJsonString(): String = {
-    implicit val AggObservationWriter = Json.writes[AggregatableObservation]
-    Json.toJson(this).toString()
   }
 
   /**
-    * use this method to combine two aggregatedobservations into one.
-    *   - sums up the flow and averages the speed
-    *   - accumulates the lanes, publish and ingest timestamps
-    */
-
+   * use this method to combine two aggregatedobservations into one.
+   *   - sums up the flow and averages the speed
+   *   - accumulates the lanes, publish and ingest timestamps
+   */
   def combineObservations(aggregatedObservation: AggregatableObservation): AggregatableObservation = {
-    val maxPublishTimestamp = Math.max(this.publishTimestamp, aggregatedObservation.publishTimestamp)
-    val maxIngestTimestamp = Math.max(this.ingestTimestamp, aggregatedObservation.ingestTimestamp)
 
     this.copy(
       lanes = this.lanes ++ aggregatedObservation.lanes,
+      publishTimestamp = Math.max(this.publishTimestamp, aggregatedObservation.publishTimestamp),
       //if period is not the same for both observations, make -1
       period = if (this.period == aggregatedObservation.period) this.period else -1,
       accumulatedFlow = this.accumulatedFlow + aggregatedObservation.accumulatedFlow,
@@ -117,9 +87,83 @@ case class AggregatableObservation(
       //computes the average speed over all the lanes of both observations
       averageSpeed = (this.averageSpeed * this.lanes.length + aggregatedObservation.averageSpeed *
         aggregatedObservation.lanes.length) / (this.lanes.length + aggregatedObservation.lanes.length),
-      speedAccuracy = if (this.speedAccuracy == aggregatedObservation.speedAccuracy) this.speedAccuracy else -1,
-      publishTimestamp = maxPublishTimestamp,
-      ingestTimestamp = maxIngestTimestamp
+      speedAccuracy = if (this.speedAccuracy == aggregatedObservation.speedAccuracy) this.speedAccuracy else -1
+    )
+  }
+}
+
+case class AggregatableFlowObservation(
+  measurementId: String,
+  laneCount: Int,
+  publishTimestamp: Long,
+  latitude: Double,
+  longitude: Double,
+  accumulatedFlow: Int,
+  period: Int,
+  flowAccuracy: Int,
+  numLanes: Int,
+  jobProfile: String
+) extends Serializable {
+
+  val roundedTimestamp = Parsers.roundMillisToSeconds(publishTimestamp)
+
+  def this(flow: FlowObservation) {
+    this(
+      flow.measurementId,
+      1,
+      flow.publishTimestamp,
+      flow.latitude,
+      flow.longitude,
+      flow.flow,
+      flow.period,
+      flow.accuracy,
+      flow.numLanes,
+      flow.jobProfile
+    )
+  }
+
+  /**
+   * use this method to combine two aggregatedobservations into one.
+   *   - sums up the flow and averages the speed
+   *   - accumulates the lanes, publish and ingest timestamps
+   */
+  def combineObservations(aggregatedObservation: AggregatableFlowObservation): AggregatableFlowObservation = {
+    this.copy(
+      laneCount = this.laneCount + aggregatedObservation.laneCount,
+      publishTimestamp = Math.max(this.publishTimestamp, aggregatedObservation.publishTimestamp),
+      //if period is not the same for both observations, make -1
+      period = if (this.period == aggregatedObservation.period) this.period else -1,
+      accumulatedFlow = this.accumulatedFlow + aggregatedObservation.accumulatedFlow,
+      flowAccuracy = if (this.flowAccuracy == aggregatedObservation.flowAccuracy) this.flowAccuracy else -1,
+    )
+  }
+}
+
+case class AggregatableFlowObservationWithTimestamp(
+  measurementId: String,
+  laneCount: Int,
+  timestamp: Timestamp,
+  publishTimestamp: Timestamp,
+  latitude: Double,
+  longitude: Double,
+  accumulatedFlow: Int,
+  period: Int,
+  flowAccuracy: Int,
+  numLanes: Int
+) extends Serializable  {  /**
+ * use this method to combine two aggregatedobservations into one.
+ *   - sums up the flow and averages the speed
+ *   - accumulates the lanes, publish and ingest timestamps
+ */
+  def combineObservations(aggregatedObservation: AggregatableFlowObservationWithTimestamp): AggregatableFlowObservationWithTimestamp = {
+    this.copy(
+      laneCount = this.laneCount + aggregatedObservation.laneCount,
+      timestamp = if (this.timestamp.after(aggregatedObservation.timestamp)) this.timestamp else aggregatedObservation.timestamp,
+      publishTimestamp = if (this.publishTimestamp.after(aggregatedObservation.publishTimestamp)) this.publishTimestamp else aggregatedObservation.publishTimestamp,
+      //if period is not the same for both observations, make -1
+      period = if (this.period == aggregatedObservation.period) this.period else -1,
+      accumulatedFlow = this.accumulatedFlow + aggregatedObservation.accumulatedFlow,
+      flowAccuracy = if (this.flowAccuracy == aggregatedObservation.flowAccuracy) this.flowAccuracy else -1,
     )
   }
 }
@@ -128,6 +172,8 @@ case class AggregatableObservationWithTimestamp(
   measurementId: String,
   lanes: List[String],
   timestamp: Timestamp,
+  roundedTimestamp: Timestamp,
+  publishTimestamp: Timestamp,
   latitude: Double,
   longitude: Double,
   accumulatedFlow: Int,
@@ -135,43 +181,18 @@ case class AggregatableObservationWithTimestamp(
   flowAccuracy: Int,
   averageSpeed: Double,
   speedAccuracy: Int,
-  numLanes: Int,
-  publishTimestamp: Long,
-  ingestTimestamp: Long
-) extends Serializable with Observation {
-
-  def this(flow: FlowObservation, speed: SpeedObservation) {
-    this(
-      flow.measurementId,
-      List(flow.internalId),
-      if(flow.timestamp>speed.timestamp) new Timestamp(flow.timestamp) else new Timestamp(speed.timestamp),
-      flow.latitude,
-      flow.longitude,
-      flow.flow,
-      flow.period,
-      flow.accuracy,
-      speed.speed,
-      speed.accuracy,
-      checkConsistentLanes(flow.numLanes, speed.numLanes),
-      Math.max(flow.publishTimestamp, speed.publishTimestamp),
-      Math.max(flow.ingestTimestamp, speed.ingestTimestamp)
-    )
-
-  }
-
-
+  numLanes: Int
+) extends Serializable {
   /**
-    * use this method to combine two aggregatedobservations into one.
-    *   - sums up the flow and averages the speed
-    *   - accumulates the lanes, publish and ingest timestamps
-    */
-
+   * use this method to combine two aggregatedobservations into one.
+   *   - sums up the flow and averages the speed
+   *   - accumulates the lanes, publish and ingest timestamps
+   */
   def combineObservations(aggregatedObservation: AggregatableObservationWithTimestamp): AggregatableObservationWithTimestamp = {
-    val maxPublishTimestamp = Math.max(this.publishTimestamp, aggregatedObservation.publishTimestamp)
-    val maxIngestTimestamp = Math.max(this.ingestTimestamp, aggregatedObservation.ingestTimestamp)
-
     this.copy(
       lanes = this.lanes ++ aggregatedObservation.lanes,
+      timestamp = if (this.timestamp.after(aggregatedObservation.timestamp)) this.timestamp else aggregatedObservation.timestamp,
+      roundedTimestamp = if (this.roundedTimestamp.after(aggregatedObservation.roundedTimestamp)) this.roundedTimestamp else aggregatedObservation.roundedTimestamp,
       //if period is not the same for both observations, make -1
       period = if (this.period == aggregatedObservation.period) this.period else -1,
       accumulatedFlow = this.accumulatedFlow + aggregatedObservation.accumulatedFlow,
@@ -179,13 +200,10 @@ case class AggregatableObservationWithTimestamp(
       //computes the average speed over all the lanes of both observations
       averageSpeed = (this.averageSpeed * this.lanes.length + aggregatedObservation.averageSpeed *
         aggregatedObservation.lanes.length) / (this.lanes.length + aggregatedObservation.lanes.length),
-      speedAccuracy = if (this.speedAccuracy == aggregatedObservation.speedAccuracy) this.speedAccuracy else -1,
-      publishTimestamp = maxPublishTimestamp,
-      ingestTimestamp = maxIngestTimestamp
+      speedAccuracy = if (this.speedAccuracy == aggregatedObservation.speedAccuracy) this.speedAccuracy else -1
     )
   }
 }
-
 
 case class RelativeChangePercentages(flowPct: Double, speedPct: Double)
 
@@ -194,26 +212,12 @@ case class RelativeChangeObservation(
   publishTimestamp: Long,
   aggregatedObservation: AggregatableObservation,
   shortDiff: Option[RelativeChangePercentages],
-  longDiff: Option[RelativeChangePercentages]) extends Serializable with Observation {
-
-  override def toJsonString(): String = {
-    Json.toJson(this)(RelativeChangeObservationtoJSONHelpers.relativeChangeObservationWriter).toString()
-  }
-}
-
-object RelativeChangeObservationtoJSONHelpers {
-  implicit val aggregatedObservationReader: Reads[AggregatableObservation] = Json.reads[AggregatableObservation]
-  implicit val relativeChangePercentagesReader: Reads[RelativeChangePercentages] = Json.reads[RelativeChangePercentages]
-  implicit val relativeChangeObservationReader: Reads[RelativeChangeObservation] = Json.reads[RelativeChangeObservation]
-
-  implicit val aggregatedObservationWriter = Json.writes[AggregatableObservation]
-  implicit val relativeChangePercentagesWriter: Writes[RelativeChangePercentages] = Json.writes[RelativeChangePercentages]
-  implicit val relativeChangeObservationWriter: Writes[RelativeChangeObservation] = Json.writes[RelativeChangeObservation]
-}
+  longDiff: Option[RelativeChangePercentages],
+  jobProfile: String) extends Serializable
 
 case class RelativeChangeObservationWithTimestamp(
   measurementId: String,
-  publishTimestamp: Long,
+  publishTimestamp: Timestamp,
   aggregatedObservation: AggregatableObservationWithTimestamp,
   shortDiff: Option[RelativeChangePercentages],
-  longDiff: Option[RelativeChangePercentages]) extends Serializable with Observation
+  longDiff: Option[RelativeChangePercentages]) extends Serializable

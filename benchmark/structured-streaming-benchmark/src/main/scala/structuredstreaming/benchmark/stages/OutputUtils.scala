@@ -20,6 +20,7 @@ class OutputUtils(sparkSession: SparkSession, settings: BenchmarkSettingsForStru
       .format("kafka")
       .option("kafka.bootstrap.servers", settings.general.kafkaBootstrapServers)
       .option("topic", settings.general.outputTopic)
+      .trigger(settings.specific.trigger)
       .start()
     if (awaitTermination) kafkaWriter.awaitTermination()
   }
@@ -30,6 +31,7 @@ class OutputUtils(sparkSession: SparkSession, settings: BenchmarkSettingsForStru
       .outputMode("append")
       .format("console")
       .option("truncate", false)
+      .trigger(settings.specific.trigger)
       .start()
 
     if (awaitTermination) consolePrinter.awaitTermination()

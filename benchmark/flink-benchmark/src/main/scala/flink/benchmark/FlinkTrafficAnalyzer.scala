@@ -14,13 +14,16 @@ package flink.benchmark
 import java.util.Properties
 
 import common.benchmark.output.JsonPrinter
-import flink.benchmark.stages.{AnalyticsStages, InitialStages, OutputMessageSerializer}
-import org.apache.flink.streaming.api.TimeCharacteristic
-import org.apache.flink.streaming.api.scala.StreamExecutionEnvironment
-import org.apache.flink.runtime.state.filesystem.FsStateBackend
+import common.config.LastStage
 import common.config.LastStage._
+import flink.benchmark.stages.{OutputMessageSerializer, StatefulStages, StatelessStages}
+import org.apache.flink.contrib.streaming.state.RocksDBStateBackend
+import org.apache.flink.runtime.state.StateBackend
+import org.apache.flink.runtime.state.filesystem.FsStateBackend
+import org.apache.flink.streaming.api.TimeCharacteristic
+import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, _}
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer
-import org.apache.flink.streaming.api.scala._
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaProducer.Semantic
 
 object FlinkTrafficAnalyzer {
 
@@ -50,29 +53,36 @@ object FlinkTrafficAnalyzer {
     val executionEnvironment = initFlink(settings)
 
     val kafkaProperties = initKafka(settings)
-    val initialStages = new InitialStages(settings, kafkaProperties)
-    val analyticsStages = new AnalyticsStages(settings, kafkaProperties)
-    val kafkaProducer = new FlinkKafkaProducer[String](settings.general.outputTopic, new OutputMessageSerializer(settings), kafkaProperties)
+    val statelessStages = new StatelessStages(settings, kafkaProperties)
+    val statefulStages = new StatefulStages(settings)
 
-    registerCorrectPartialFlowForRun(settings, executionEnvironment, kafkaProducer, initialStages, analyticsStages)
+    val processingSemantic = if(settings.specific.exactlyOnce) Semantic.EXACTLY_ONCE
+    else Semantic.AT_LEAST_ONCE
+    val kafkaProducer = new FlinkKafkaProducer[(String, String)](
+      settings.general.outputTopic,
+      new OutputMessageSerializer(settings),
+      kafkaProperties,
+      processingSemantic)
+
+    registerCorrectPartialFlowForRun(settings, executionEnvironment, kafkaProducer, statelessStages, statefulStages)
 
     executionEnvironment.execute("Flink Traffic Analyzer")
   }
 
   def registerCorrectPartialFlowForRun(settings: BenchmarkSettingsForFlink,
-    executionEnvironment: StreamExecutionEnvironment, kafkaProducer: FlinkKafkaProducer[String],
-    initialStages: InitialStages, analyticsStages: AnalyticsStages)
+    executionEnvironment: StreamExecutionEnvironment, kafkaProducer: FlinkKafkaProducer[(String, String)],
+    statelessStages: StatelessStages, statefulStages: StatefulStages)
   : Unit = settings.general.lastStage match {
     case UNTIL_INGEST =>
-      val rawStream = initialStages.ingestStage(executionEnvironment)
-      rawStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
+      val rawStream = statelessStages.ingestStage(executionEnvironment)
+      rawStream.map(r => JsonPrinter.jsonFor(r, settings.specific.jobProfileKey)).addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
         rawStream.print()
       }
 
     case UNTIL_PARSE =>
-      val rawStream = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawStream)
+      val rawStream = statelessStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawStream)
       flowStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       speedStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
@@ -81,33 +91,72 @@ object FlinkTrafficAnalyzer {
       }
 
     case UNTIL_JOIN =>
-      val rawStream = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawStream)
-      val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
+      val rawStream = statelessStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawStream)
+      val joinedSpeedAndFlowStreams = statefulStages.intervalJoinStage(flowStream, speedStream)
       joinedSpeedAndFlowStreams.map { r => JsonPrinter.jsonFor(r) }.addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
         joinedSpeedAndFlowStreams.print()
       }
 
     case UNTIL_TUMBLING_WINDOW =>
-      val rawStream = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawStream)
-      val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
-      val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
+      val rawStream = statelessStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawStream)
+      val joinedSpeedAndFlowStreams = statefulStages.intervalJoinStage(flowStream, speedStream)
+      val aggregateStream = statefulStages.aggregationAfterJoinStage(joinedSpeedAndFlowStreams)
       aggregateStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
         aggregateStream.print()
       }
 
     case UNTIL_SLIDING_WINDOW =>
-      val rawStream = initialStages.ingestStage(executionEnvironment)
-      val (flowStream, speedStream) = initialStages.parsingStage(rawStream)
-      val joinedSpeedAndFlowStreams = initialStages.joinStage(flowStream, speedStream)
-      val aggregateStream = analyticsStages.aggregationStage(joinedSpeedAndFlowStreams)
-      val relativeChangeStream = analyticsStages.relativeChangeStage(aggregateStream)
+      val rawStream = statelessStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawStream)
+      val joinedSpeedAndFlowStreams = statefulStages.intervalJoinStage(flowStream, speedStream)
+      val aggregateStream = statefulStages.aggregationAfterJoinStage(joinedSpeedAndFlowStreams)
+      val relativeChangeStream = statefulStages.slidingWindowAfterAggregationStage(aggregateStream)
       relativeChangeStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
       if (settings.general.shouldPrintOutput) {
         relativeChangeStream.print()
+      }
+
+    case UNTIL_LOWLEVEL_TUMBLING_WINDOW =>
+      val rawStream = statelessStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawStream)
+      val joinedSpeedAndFlowStreams = statefulStages.intervalJoinStage(flowStream, speedStream)
+      val aggregateStream = statefulStages.lowLevelAggregationAfterJoinStage(joinedSpeedAndFlowStreams)
+      aggregateStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
+      if (settings.general.shouldPrintOutput) {
+        aggregateStream.print()
+      }
+
+    case UNTIL_LOWLEVEL_SLIDING_WINDOW =>
+      val rawStream = statelessStages.ingestStage(executionEnvironment)
+      val (flowStream, speedStream) = statelessStages.parsingStage(rawStream)
+      val joinedSpeedAndFlowStreams = statefulStages.intervalJoinStage(flowStream, speedStream)
+      val aggregateStream = statefulStages.lowLevelAggregationAfterJoinStage(joinedSpeedAndFlowStreams)
+      val relativeChangeStream = statefulStages.lowLevelSlidingWindowAfterAggregationStage(aggregateStream)
+      relativeChangeStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
+      if (settings.general.shouldPrintOutput) {
+        relativeChangeStream.print()
+      }
+
+    case LastStage.REDUCE_WINDOW_WITHOUT_JOIN =>
+      val rawFlowStream = statelessStages.ingestFlowStreamStage(executionEnvironment)
+      val flowStream = statelessStages.parsingFlowStreamStage(rawFlowStream)
+      val aggregatedFlowStream = statefulStages.reduceWindowAfterParsingStage(flowStream)
+      aggregatedFlowStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
+      if (settings.general.shouldPrintOutput) {
+        aggregatedFlowStream.print()
+      }
+
+    case LastStage.NON_INCREMENTAL_WINDOW_WITHOUT_JOIN =>
+      val rawFlowStream = statelessStages.ingestFlowStreamStage(executionEnvironment)
+      val flowStream = statelessStages.parsingFlowStreamStage(rawFlowStream)
+      val aggregatedFlowStream = statefulStages.nonIncrementalWindowAfterParsingStage(flowStream)
+      aggregatedFlowStream.map(r => JsonPrinter.jsonFor(r)).addSink(kafkaProducer)
+      if (settings.general.shouldPrintOutput) {
+        aggregatedFlowStream.print()
       }
   }
 
@@ -119,17 +168,16 @@ object FlinkTrafficAnalyzer {
     */
   def initFlink(settings: BenchmarkSettingsForFlink): StreamExecutionEnvironment = {
     val executionEnvironment = StreamExecutionEnvironment.getExecutionEnvironment
-    executionEnvironment.setParallelism(settings.general.partitions)
+    executionEnvironment.setParallelism(settings.specific.partitions)
     executionEnvironment.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
     // The interval at which the getCurrentWatermark method is called from the WatermarkAssigners
     executionEnvironment.getConfig.setAutoWatermarkInterval(settings.specific.autoWatermarkInterval)
     executionEnvironment.setBufferTimeout(settings.specific.bufferTimeout)
     executionEnvironment.enableCheckpointing(settings.specific.checkpointInterval)
-
     executionEnvironment.getConfig.enableObjectReuse()
 
-
-    val stateBackend: FsStateBackend = new FsStateBackend(settings.specific.checkpointDir, true)
+    val stateBackend: StateBackend = new FsStateBackend(settings.specific.checkpointDir, true)
+//    val stateBackend: StateBackend = new RocksDBStateBackend(settings.specific.checkpointDir, true)
     executionEnvironment.setStateBackend(stateBackend)
   }
 
@@ -144,6 +192,8 @@ object FlinkTrafficAnalyzer {
     val kafkaProperties = new Properties()
     kafkaProperties.setProperty("bootstrap.servers", settings.general.kafkaBootstrapServers)
     kafkaProperties.setProperty("group.id", timeToString)
+    if(settings.general.local) kafkaProperties.setProperty("transaction.timeout.ms", "900000")
+    kafkaProperties.setProperty("enable.idempotence", "true")
     kafkaProperties
   }
 }

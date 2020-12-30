@@ -1,11 +1,11 @@
 
-package spark.benchmark.phases
+package spark.benchmark.stages
 
 import com.holdenkarau.spark.testing.StreamingSuiteBase
 import common.utils.TestObservations
 import org.scalatest.FunSuite
 import spark.benchmark.BenchmarkSettingsForSpark
-import spark.benchmark.stages.AnalyticsStages
+import spark.benchmark.stages.StatefulStages
 
 /**
   * Test aggregation phase
@@ -23,14 +23,14 @@ class AggregationStageTest extends FunSuite with StreamingSuiteBase {
     // Initialize Apache Spark
     val settings = new BenchmarkSettingsForSpark()
     // Test data which is the result of the join phase
-    val testDataAfterJoinPhase = TestObservations.observationsAfterJoinPhase.flatten
+    val testDataAfterJoinPhase = TestObservations.observationsAfterJoinStage.flatten
 
     // The expected result of the aggregation phase
-    val expectedResultOfAggregation = TestObservations.observationsAfterAggregationPhase.flatten
+    val expectedResultOfAggregation = TestObservations.observationsAfterAggregationStage.flatten
 
-    val analyticsStages = new AnalyticsStages(settings)
+    val statefulStages = new StatefulStages(settings)
     // Aggregate over lanes per measurement ID
-    testOperation(Seq(testDataAfterJoinPhase), analyticsStages.aggregationStage _, Seq(expectedResultOfAggregation), ordered=false)
+    testOperation(Seq(testDataAfterJoinPhase), statefulStages.aggregationAfterJoinStage _, Seq(expectedResultOfAggregation), ordered=false)
 
   }
 
