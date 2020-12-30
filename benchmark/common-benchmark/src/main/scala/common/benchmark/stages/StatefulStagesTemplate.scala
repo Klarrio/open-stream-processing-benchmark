@@ -6,8 +6,17 @@ package common.benchmark.stages
   * but the type signatures in the different implemenations
   * differ too much to use actual inheritance for enforcing this.
   */
-trait AnalyticsStagesTemplate {
+trait StatefulStagesTemplate {
 
+  /**
+   * Joins the flow and speed streams
+   *
+   * @param parsedFlowStream parsed stream of [[common.benchmark.FlowObservation]] data
+   * @param parsedSpeedStream parsed stream of [[common.benchmark.SpeedObservation]] data
+   * @return [[common.benchmark.FlowObservation]] and [[common.benchmark.SpeedObservation]]
+   */
+
+  //  def joinStage
 
   /**
     * Aggregates over the lanes and times computation time
@@ -18,7 +27,7 @@ trait AnalyticsStagesTemplate {
     *
     * @param parsedAndJoinedStream a [[common.benchmark.FlowObservation]] and [[common.benchmark.SpeedObservation]] belonging to a measurement point
     */
-  //def generateAggregatedStream
+  //def aggregationAfterJoinStage
 
 
   /**
@@ -29,7 +38,7 @@ trait AnalyticsStagesTemplate {
     *
     * @param aggregatedStream of [[common.benchmark.AggregatableObservation]]
     */
-  //def generateRelativeChangeStream
+  //def slidingWindowAfterAggregationStage
 
 
   /**
@@ -52,4 +61,27 @@ trait AnalyticsStagesTemplate {
     * @param aggregatedStream with [[common.benchmark.AggregatableObservation]] per measurement ID for the entire long look-back window
     */
   //def computeRelativeChange
+
+  /**
+   * Computes a tumbling or sliding window on the flow stream
+   * When the slide and tumble interval are equal, this is a tumbling window.
+   * When the slide and tumble interval are different, this is a sliding window.
+   * This window will be computed incrementally using a reduce function.
+   *
+   * @param parsedFlowStream parsed stream of [[common.benchmark.FlowObservation]] data
+   * @return aggregated data on a slide and tumble interval
+   */
+//  def reduceWindowAfterParsingStage
+
+  /**
+   * Computes a tumbling or sliding window on the flow stream
+   * When the slide and tumble interval are equal, this is a tumbling window.
+   * When the slide and tumble interval are different, this is a sliding window.
+   * This window will not be computed incrementally and the entire window will be buffered.
+   *
+   * @param parsedFlowStream parsed stream of [[common.benchmark.FlowObservation]] data
+   * @return aggregated data on a slide and tumble interval
+   */
+  //  def nonIncrementalWindowAfterParsingStage
+
 }

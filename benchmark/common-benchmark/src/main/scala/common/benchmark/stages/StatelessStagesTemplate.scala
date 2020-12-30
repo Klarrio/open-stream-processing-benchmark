@@ -6,13 +6,13 @@ package common.benchmark.stages
   * but the type signatures in the different implemenations
   * differ too much to use actual inheritance for enforcing this.
   */
-trait InitialStagesTemplate {
+trait StatelessStagesTemplate {
   /**
-    * Consumes from Kafka from flow topic
+    * Consumes from Kafka from flow and speed topic
     *
     * @return raw kafka stream
     */
-//  def readInStreams
+//  def ingestStage
 
 
   /**
@@ -20,17 +20,20 @@ trait InitialStagesTemplate {
     *
     * @return stream of [[common.benchmark.FlowObservation]] and stream of [[common.benchmark.SpeedObservation]]
     */
-//  def parseStreams
+//  def parsingStage
 
   /**
-    * Joins the flow and speed streams
-    *
-    * @param parsedFlowStream [[common.benchmark.FlowObservation]]
-    * @param parsedSpeedStream [[common.benchmark.SpeedObservation]]
-    * @return [[common.benchmark.FlowObservation]] and [[common.benchmark.SpeedObservation]]
-    */
+   * Consumes from Kafka from flow topic
+   *
+   * @return raw kafka stream
+   */
+  //  def ingestFlowStreamStage
 
-//  def joinFlowAndSpeedStream
-
+  /**
+   * Parses only flow events
+   *
+   * @return stream of [[common.benchmark.FlowObservation]]
+   */
+  //  def parsingFlowStreamStage
 
 }

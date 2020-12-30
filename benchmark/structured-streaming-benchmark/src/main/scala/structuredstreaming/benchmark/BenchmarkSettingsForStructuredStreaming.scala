@@ -2,6 +2,9 @@ package structuredstreaming.benchmark
 
 import com.typesafe.config.{Config, ConfigFactory}
 import common.config.GeneralConfig
+import common.config.JobExecutionMode.{CONSTANT_RATE, LATENCY_CONSTANT_RATE}
+import common.config.LastStage.{NON_INCREMENTAL_WINDOW_WITHOUT_JOIN, REDUCE_WINDOW_WITHOUT_JOIN}
+import org.apache.spark.sql.streaming.Trigger
 
 import scala.collection.JavaConverters._
 
@@ -13,7 +16,7 @@ object BenchmarkSettingsForStructuredStreaming {
 
 }
 
-class BenchmarkSettingsForStructuredStreaming(overrides: Map[String, String] = Map()) extends Serializable {
+class BenchmarkSettingsForStructuredStreaming(overrides: Map[String, Any] = Map()) extends Serializable {
 
   val general = new GeneralConfig(overrides)
 
@@ -27,16 +30,17 @@ class BenchmarkSettingsForStructuredStreaming(overrides: Map[String, String] = M
     val checkpointDir: String = if (general.local) general.configProperties.getString("spark.checkpoint.dir")
     else "hdfs://" + general.hdfsActiveNameNode + "/checkpointDirStructured" + System.currentTimeMillis() + "/"
 
+    val defaultParallelism: Int = general.configProperties.getInt("spark.default.parallelism")
+    val sqlShufflePartitions: Int = general.configProperties.getInt("spark.sql.shuffle.partitions")
+    val blockInterval: Int = 1000/defaultParallelism
     val sparkMaster: String = general.configProperties.getString("spark.master")
-    val parallelism: Int = sparkProperties.getInt("default.parallelism")
-    val sqlShufflePartitions: Int = sparkProperties.getInt("sql.shuffle.partitions")
-    val blockInterval: Int = sparkProperties.getInt("block.interval.millis")
-    val sqlMinBatchesToRetain: Int = sparkProperties.getInt("sql.streaming.minBatchesToRetain")
-    val backpressureEnabled: Boolean = sparkProperties.getBoolean("streaming.backpressure.enabled")
-    val localityWait: Int = sparkProperties.getInt("locality.wait")
     val watermarkMillis: Long = sparkProperties.getLong("watermark.ms")
-    val useCustomTumblingWindow: Boolean = sparkProperties.getString("tumbling.window") == "custom"
+    val localityWait: Int = sparkProperties.getInt("locality.wait")
+    val writeAheadLogEnabled: Boolean = sparkProperties.getBoolean("spark.streaming.receiver.writeAheadLog.enable")
 
-    val jobProfileKey: String = general.mkJobProfileKey("structuredstreaming", general.windowSlideIntervalMillis)
+    val trigger: Trigger = if(general.lastStage == REDUCE_WINDOW_WITHOUT_JOIN || general.lastStage == NON_INCREMENTAL_WINDOW_WITHOUT_JOIN) Trigger.ProcessingTime(general.slideDurationMsOfWindowAfterParse)
+    else Trigger.ProcessingTime(0) // processing as fast as possible
+
+    val jobProfileKey: String = general.mkJobProfileKey("structuredstreaming", general.publishIntervalMillis)
   }
 }

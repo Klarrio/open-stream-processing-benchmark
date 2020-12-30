@@ -9,7 +9,7 @@ import org.apache.flink.util.FileUtils
 import scala.collection.JavaConverters._
 import scala.util.Try
 
-class BenchmarkSettingsForFlink(overrides: Map[String, String] = Map()) extends Serializable {
+class BenchmarkSettingsForFlink(overrides: Map[String, Any] = Map()) extends Serializable {
   val general = new GeneralConfig(overrides)
 
   object specific extends Serializable {
@@ -19,12 +19,12 @@ class BenchmarkSettingsForFlink(overrides: Map[String, String] = Map()) extends 
       .getConfig("flink")
       .getConfig(general.mode.name)
 
+    val partitions: Int = general.configProperties.getString("flink.partitions").toInt
     val autoWatermarkInterval: Int = flinkProperties.getInt("auto.watermark.interval")
     val maxOutOfOrderness: Int = flinkProperties.getInt("max.out.of.orderness")
     val bufferTimeout: Long = flinkProperties.getLong("buffer.timeout")
     val checkpointInterval: Int = flinkProperties.getInt("checkpoint.interval")
-    val useCustomTumblingWindow: Boolean = flinkProperties.getString("tumbling.window") == "custom"
-    val useCustomSlidingWindow: Boolean = flinkProperties.getString("sliding.window") == "custom"
+    val exactlyOnce: Boolean = flinkProperties.getBoolean("exactly.once")
 
     // Checkpointing
     val checkpointDir: String = if (general.local) {

@@ -1,0 +1,20 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="kafka.server" level="INFO"/>
+    <logger name="org.apache.kafka" level="INFO"/>
+    <logger name="org.jmxtrans.embedded" level="info" />
+    <logger name="deng" level="INFO"/>
+    <logger name="org.apache.kafka" level="WARN"/>
+    <logger name="org.apache.spark" level="WARN"/>
+    <logger name="org.apache.spark.sql.execution.streaming.MicroBatchExecution" level="INFO"/>
+
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+    </root>
+</configuration>

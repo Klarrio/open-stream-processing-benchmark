@@ -1,31 +1,42 @@
 package flink.benchmark.stages
 
-import java.util.Properties
-
 import common.benchmark.{AggregatableObservation, RelativeChangeObservation}
 import common.utils.TestObservations
 import flink.benchmark.BenchmarkSettingsForFlink
-import flink.benchmark.stages.AnalyticsStages
-import org.apache.flink.contrib.streaming.DataStreamUtils
+import flink.benchmark.testutils.RelativeChangeCollectSink
+import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration
 import org.apache.flink.streaming.api.TimeCharacteristic
+import org.apache.flink.streaming.api.functions.sink.SinkFunction
 import org.apache.flink.streaming.api.functions.source.SourceFunction
 import org.apache.flink.streaming.api.functions.source.SourceFunction.SourceContext
-import org.apache.flink.streaming.api.watermark.Watermark
 import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, _}
+import org.apache.flink.streaming.api.watermark.Watermark
+import org.apache.flink.test.util.MiniClusterWithClientResource
+import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 
-import scala.collection.JavaConverters._
-import org.scalatest.FunSuite
-
-class RelativeChangeStageTest extends FunSuite {
+class RelativeChangeStageTest extends FlatSpec with Matchers with BeforeAndAfter {
   val settings = new BenchmarkSettingsForFlink
 
-  test("test windowing utils") {
-    val env = StreamExecutionEnvironment.createLocalEnvironment(1)
+  val flinkCluster = new MiniClusterWithClientResource(new MiniClusterResourceConfiguration.Builder()
+    .setNumberSlotsPerTaskManager(1)
+    .setNumberTaskManagers(1)
+    .build())
+
+  before {
+    flinkCluster.before()
+  }
+
+  after {
+    flinkCluster.after()
+  }
+
+  "relative change stage" should " produce correct output" in {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
 
     val source1 = env.addSource(new SourceFunction[AggregatableObservation]() {
       override def run(ctx: SourceContext[AggregatableObservation]) {
-        TestObservations.observationsInputRelativeChangePhase.foreach { next =>
+        TestObservations.observationsInputRelativeChangeStage.foreach { next =>
           next.distinct.foreach { obs =>
             ctx.collectWithTimestamp(obs, obs.publishTimestamp)
             ctx.emitWatermark(new Watermark(obs.publishTimestamp-50))
@@ -36,22 +47,16 @@ class RelativeChangeStageTest extends FunSuite {
       override def cancel(): Unit = ()
     })
 
-    val kafkaProperties = new Properties()
-    kafkaProperties.setProperty("bootstrap.servers", settings.general.kafkaBootstrapServers)
+    val statefulStages = new StatefulStages(settings)
+    statefulStages.slidingWindowAfterAggregationStage(source1)
+      .addSink(new RelativeChangeCollectSink())
 
-    val aggregationAndWindowUtils = new AnalyticsStages(settings, kafkaProperties)
+    env.execute("relative-change-stage-test")
 
-    val windowedStream = aggregationAndWindowUtils.relativeChangeStage(source1)
-    val myOutput = DataStreamUtils.collect(windowedStream.javaStream).asScala
+    val expectedResult = TestObservations.observationsAfterRelativeChangeStage
+      .flatten.sortBy { f: RelativeChangeObservation => (f.measurementId, f.aggregatedObservation.publishTimestamp) }
 
-    env.execute("Test window utils")
-
-    val myOutputList = myOutput.toList
-      .sortBy { f: RelativeChangeObservation => (f.measurementId, f.aggregatedObservation.timestamp) }
-
-    val expectedResult = TestObservations.observationsAfterRelativeChangePhase
-      .flatten.sortBy { f: RelativeChangeObservation => (f.measurementId, f.aggregatedObservation.timestamp) }
-
-    assert(myOutputList === expectedResult)
+    RelativeChangeCollectSink.values should contain allElementsOf(expectedResult)
   }
 }
+

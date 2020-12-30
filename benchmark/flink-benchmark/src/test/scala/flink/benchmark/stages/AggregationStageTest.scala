@@ -1,33 +1,50 @@
 package flink.benchmark.stages
 
-import java.util.Properties
-
 import common.benchmark.{AggregatableObservation, FlowObservation, SpeedObservation}
 import common.utils.TestObservations
 import flink.benchmark.BenchmarkSettingsForFlink
-import org.apache.flink.contrib.streaming.DataStreamUtils
+import flink.benchmark.testutils.AggregatableObservationCollectSink
+import org.apache.flink.runtime.testutils.MiniClusterResourceConfiguration
 import org.apache.flink.streaming.api.TimeCharacteristic
+import org.apache.flink.streaming.api.functions.sink.SinkFunction
 import org.apache.flink.streaming.api.functions.source.SourceFunction
 import org.apache.flink.streaming.api.functions.source.SourceFunction.SourceContext
 import org.apache.flink.streaming.api.scala.{StreamExecutionEnvironment, _}
 import org.apache.flink.streaming.api.watermark.Watermark
-import org.scalatest.FunSuite
+import org.apache.flink.test.util.MiniClusterWithClientResource
+import org.scalatest.{BeforeAndAfter, FlatSpec, Matchers}
 
-import scala.collection.JavaConverters.asScalaIteratorConverter
-
-class AggregationStageTest extends FunSuite {
+class AggregationStageTest extends FlatSpec with Matchers with BeforeAndAfter {
   val settings = new BenchmarkSettingsForFlink()
 
-  test("test aggregation utils") {
-    val env = StreamExecutionEnvironment.createLocalEnvironment(1)
+  val flinkCluster = new MiniClusterWithClientResource(new MiniClusterResourceConfiguration.Builder()
+    .setNumberSlotsPerTaskManager(1)
+    .setNumberTaskManagers(1)
+    .build())
+  
+  val statefulStages = new StatefulStages(settings)
+
+  val expectedResult: Seq[AggregatableObservation] = TestObservations.observationsAfterAggregationStage.flatten
+    .sortBy { f: AggregatableObservation => (f.measurementId, f.publishTimestamp) }
+
+  before {
+    flinkCluster.before()
+  }
+
+  after {
+    flinkCluster.after()
+  }
+
+  "aggregation stage" should " produce correct output" in  {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
 
     val source1 = env.addSource(new SourceFunction[(FlowObservation, SpeedObservation)]() {
       override def run(ctx: SourceContext[(FlowObservation, SpeedObservation)]) {
-        TestObservations.observationsAfterJoinPhase.foreach { next =>
+        TestObservations.observationsAfterJoinStage.foreach { next =>
           next.foreach { obs =>
-            ctx.collectWithTimestamp(obs._2, obs._2._1.timestamp)
-            ctx.emitWatermark(new Watermark(obs._2._1.timestamp-50))
+            ctx.collectWithTimestamp(obs._2, obs._2._1.publishTimestamp)
+            ctx.emitWatermark(new Watermark(obs._2._1.publishTimestamp-50))
           }
         }
         ctx.close()
@@ -35,26 +52,13 @@ class AggregationStageTest extends FunSuite {
       override def cancel(): Unit = ()
     })
 
-    val kafkaProperties = new Properties()
-    kafkaProperties.setProperty("bootstrap.servers", settings.general.kafkaBootstrapServers)
-
-    val analyticsStages = new AnalyticsStages(settings, kafkaProperties)
-
-    val aggregatedStream = analyticsStages.aggregationStage(source1
+    statefulStages.aggregationAfterJoinStage(source1
       .map{event: (FlowObservation, SpeedObservation) => new AggregatableObservation(event._1, event._2) })
+      .addSink(new AggregatableObservationCollectSink())
 
-    val myOutput = DataStreamUtils.collect(aggregatedStream.javaStream).asScala
+    env.execute("aggregation-stage-test")
 
-    env.execute("Test aggregation utils")
-
-    val myOutputList = myOutput.toList
-      .sortBy { f: AggregatableObservation => (f.measurementId, f.timestamp) }
-
-
-    val expectedResult = TestObservations.observationsAfterAggregationPhase.flatten
-      .sortBy { f: AggregatableObservation => (f.measurementId, f.timestamp) }
-
-    assert( myOutputList === expectedResult)
+    AggregatableObservationCollectSink.values should contain allElementsOf(expectedResult)
   }
 }
 
