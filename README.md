@@ -1,8 +1,8 @@
-# [OSPBench: Open Stream Processing Benchmark](https://github.com/Klarrio/ugent-phd-scalability-benchmark/wiki)
+# [OSPBench: Open Stream Processing Benchmark](https://github.com/Klarrio/open-stream-processing-benchmark/wiki)
 
 This repository contains the code of the open stream processing benchmark.
 
-All documentation can be found in our [wiki](https://github.com/Klarrio/ugent-phd-scalability-benchmark/wiki).
+All documentation can be found in our [wiki](https://github.com/Klarrio/open-stream-processing-benchmark/wiki).
 
 It includes:
 - benchmark pipeline implementations
