@@ -4,13 +4,14 @@ This repository contains the code of the open stream processing benchmark.
 
 All documentation can be found in our [wiki](https://github.com/Klarrio/open-stream-processing-benchmark/wiki).
 
-It includes:
-- benchmark pipeline implementations
+This code base includes:
+- benchmark pipeline implementations: 
 - data stream generator to generate input streams locally or on a DC/OS cluster
 - Kafka scripts to start a cluster and read from a topic for local development
 
 Currently the benchmark includes Apache Spark (Spark Streaming and Structured Streaming), Apache Flink and Kafka Streams.
- structured-streaming-benchmark or kafka-benchmark
+
+Documentation on running the benchmark locally can be found in our [wiki](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Architecture-and-deployment).
 
 ## References, Publications and Talks
 - [van Dongen, G., & Van den Poel, D. (2020). Evaluation of Stream Processing Frameworks. IEEE Transactions on Parallel and Distributed Systems, 31(8), 1845-1858.](https://ieeexplore.ieee.org/abstract/document/9025240)
