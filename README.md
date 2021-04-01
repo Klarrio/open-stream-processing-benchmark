@@ -11,6 +11,8 @@ This code base includes:
 
 Currently the benchmark includes Apache Spark (Spark Streaming and Structured Streaming), Apache Flink and Kafka Streams.
 
+## Running the benchmark locally 
+
 Documentation on running the benchmark locally can be found in our [wiki](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Architecture-and-deployment).
 
 ## References, Publications and Talks
