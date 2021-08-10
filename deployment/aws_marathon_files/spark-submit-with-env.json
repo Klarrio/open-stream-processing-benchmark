@@ -1,0 +1,73 @@
+{
+  "id": "/spark-submit",
+  "acceptedResourceRoles": [
+    "*",
+    "slave_public"
+  ],
+  "instances": 1,
+  "container": {
+    "type": "DOCKER",
+    "volumes": [],
+    "docker": {
+      "image": "gisellevd/ospbench-spark-submit:3.0.0",
+      "forcePullImage": true,
+      "privileged": false,
+      "parameters": [
+        {
+          "key": "label",
+          "value": "application=spark-submit"
+        },
+        {
+          "key": "user",
+          "value": "root"
+        }
+      ]
+    }
+  },
+  "cpus": 2,
+  "mem": 6144,
+  "disk": 6144,
+  "requirePorts": true,
+  "networks": [
+    {
+      "mode": "host"
+    }
+  ],
+  "healthChecks": [],
+  "constraints": [],
+  "env": {
+    "FRAMEWORK": "$FRAMEWORK",
+    "JAR_NAME": "$JAR_NAME",
+    "LAST_STAGE": "$LAST_STAGE",
+    "KAFKA_AUTO_OFFSET_RESET_STRATEGY": "$KAFKA_AUTO_OFFSET_RESET_STRATEGY",
+    "KAFKA_BOOTSTRAP_SERVERS": "$KAFKA_BOOTSTRAP_SERVERS",
+    "ACTIVE_HDFS_NAME_NODE": "$ACTIVE_HDFS_NAME_NODE",
+    "TOPICNAME": "$TOPICNAME",
+    "VOLUME": "$DATA_VOLUME",
+    "MODE": "$MODE",
+    "FLOWTOPIC": "$FLOWTOPIC",
+    "SPEEDTOPIC": "$SPEEDTOPIC",
+    "AMT_WORKERS": "$AMT_WORKERS",
+    "WORKER_CPU": "$WORKER_CPU",
+    "WORKER_MEM": "$WORKER_MEM",
+    "SPARK_EXECUTOR_MEMORY": "$SPARK_EXECUTOR_MEMORY",
+    "SPARK_DEFAULT_PARALLELISM": "$NUM_PARTITIONS",
+    "SPARK_SQL_SHUFFLE_PARTITIONS": "$NUM_SQL_PARTITIONS",
+    "SPARK_CORES_MAX": "$SPARK_CORES_MAX",
+    "CONC_GC_THREADS": "$CONC_GC_THREADS",
+    "AWS_ACCESS_KEY_ID": "$AWS_ACCESS_KEY",
+    "AWS_SECRET_ACCESS_KEY": "$AWS_SECRET_KEY"
+  },
+  "portDefinitions": [
+    {
+      "name": "driver-web-ui",
+      "protocol": "udp,tcp",
+      "port": 4040
+    },
+    {
+      "name": "driver",
+      "protocol": "udp,tcp",
+      "port": 7008
+    }
+  ]
+}

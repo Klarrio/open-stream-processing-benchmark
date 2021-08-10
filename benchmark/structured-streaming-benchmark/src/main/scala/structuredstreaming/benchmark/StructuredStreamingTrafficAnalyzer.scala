@@ -231,8 +231,8 @@ object StructuredStreamingTrafficAnalyzer {
   def initSpark(settings: BenchmarkSettingsForStructuredStreaming): SparkSession = {
     val sparkSession = SparkSession.builder()
       .master(settings.specific.sparkMaster)
-      .appName("structured-streaming-benchmark" + System.currentTimeMillis())
-      .config("spark.sql.streaming.multipleWatermarkPolicy", "max")
+      .appName("structured-streaming-benchmark")
+//      .config("spark.sql.streaming.multipleWatermarkPolicy", "min")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .config(getKryoConfig)
       .config("spark.sql.streaming.checkpointLocation", settings.specific.checkpointDir)

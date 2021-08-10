@@ -110,7 +110,7 @@ object KafkaTrafficAnalyzer {
             }
 
             override def transform(key: String, value: String): KeyValue[String, String] = {
-              val (parsedKey, parsedValue) = JsonPrinter.jsonFor((processorContext.topic(), value, processorContext.timestamp()), settings.specific.jobProfileKey)
+              val (parsedKey, parsedValue) = JsonPrinter.jsonFor((key, value, processorContext.timestamp()), settings.specific.jobProfileKey)
               new KeyValue[String, String](parsedKey, parsedValue)
             }
 

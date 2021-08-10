@@ -1,0 +1,40 @@
+language: bash
+services: docker
+
+env:
+  global:
+    - PROJECT=spark
+    - NAMESPACE=actionml
+    - PUSH_NAMESPACES=actionml
+
+install:
+  - curl -sSL https://github.com/stackfeed/ci-scripts/raw/master/install.sh | sh -s
+  - git clone https://github.com/docker-library/official-images.git ~/official-images
+
+before_script:
+  - |
+      export PATH=$PATH:~/ci-scripts
+      [ ${TRAVIS_BRANCH} == master ] || export variant=${TRAVIS_BRANCH}
+
+script:
+  - docker-build -v "${variant}" $NAMESPACE/$PROJECT .
+  - ~/official-images/test/run.sh $(docker images -q | head -n1)
+
+after_success:
+  - |
+    # Check if not PR and namespace (org or user) is in the push list PUSH_NAMESPACES.
+    [ "${TRAVIS_PULL_REQUEST}" = "false" ] && ( echo "${PUSH_NAMESPACES}" | grep -qw "${TRAVIS_REPO_SLUG%/*}" )
+    [ $? -eq 0 ] || exit 0
+
+    # List of newly created images
+    export images=$(docker images | grep "^$NAMESPACE/$PROJECT" | tr -s '[:space:]' | cut -f1,2 -d' ' | sed 's/ /:/')
+
+    # Push to docker when DEPLOY is true
+    docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+    for image in $images; do docker push $image; done
+
+after_script:
+  - docker images
+
+notifications:
+  webhooks: https://hooks.microbadger.com/images/actionml/spark/${MICROBADGER_TOKEN}

@@ -1,0 +1,70 @@
+{
+  "id": "/kafka-streams/kafka-thread-${KAFKA_THREAD_NB}",
+  "acceptedResourceRoles": [
+    "*",
+    "slave_public"
+  ],
+  "backoffFactor": 1.15,
+  "backoffSeconds": 1,
+  "container": {
+    "type": "DOCKER",
+    "volumes": [],
+    "docker": {
+      "image": "gisellevd/ospbench-kafka-benchmark:3.0",
+      "forcePullImage": true,
+      "privileged": false,
+      "parameters": [
+        {
+          "key": "label",
+          "value": "application=kafka-thread-${KAFKA_THREAD_NB}"
+        }
+      ]
+    }
+  },
+  "cpus": $WORKER_CPU,
+  "disk": 20480,
+  "env": {
+    "JAVA_OPTS":"-Xms${WORKER_HEAP_MEM_MB}m -Xmx${WORKER_HEAP_MEM_MB}m",
+    "MODE":"$MODE",
+    "KAFKA_BOOTSTRAP_SERVERS": "$KAFKA_BOOTSTRAP_SERVERS",
+    "LAST_STAGE": "$LAST_STAGE",
+    "KAFKA_AUTO_OFFSET_RESET_STRATEGY": "$KAFKA_AUTO_OFFSET_RESET_STRATEGY",
+    "METRICS_TOPIC":"$TOPICNAME",
+    "FLOWTOPIC": "$FLOWTOPIC",
+    "SPEEDTOPIC": "$SPEEDTOPIC",
+    "VOLUME": "$DATA_VOLUME",
+    "BUFFER_TIMEOUT": "$BUFFER_TIMEOUT",
+    "AMT_WORKERS":"$AMT_WORKERS",
+    "WORKER_CPU":"$WORKER_CPU",
+    "WORKER_MEM":"$WORKER_MEM",
+    "NUM_THREADS_PER_INSTANCE":"$NUM_THREADS_PER_INSTANCE"
+  },
+  "instances": 1,
+  "maxLaunchDelaySeconds": 3600,
+  "mem": $WORKER_MEM_MB,
+  "gpus": 0,
+  "networks": [
+    {
+      "mode": "host"
+    }
+  ],
+  "portDefinitions": [
+    {
+      "name": "jmx-reporter",
+      "protocol": "udp,tcp",
+      "port": 8500
+    }
+  ],
+  "requirePorts": true,
+  "upgradeStrategy": {
+    "maximumOverCapacity": 1,
+    "minimumHealthCapacity": 1
+  },
+  "killSelection": "YOUNGEST_FIRST",
+  "unreachableStrategy": {
+    "inactiveAfterSeconds": 0,
+    "expungeAfterSeconds": 0
+  },
+  "healthChecks": [],
+  "constraints": []
+}

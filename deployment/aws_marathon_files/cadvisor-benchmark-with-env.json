@@ -1,0 +1,83 @@
+{
+  "id": "/cadvisor",
+  "cmd": "/usr/bin/cadvisor  -storage_driver=influxdb -storage_driver_db=cadvisor -storage_driver_host=influxdb.marathon.l4lb.thisdcos.directory:8086",
+  "cpus": 0.25,
+  "mem": 256,
+  "disk": 0,
+  "instances": $AMT_SLAVES,
+  "constraints": [
+    [
+      "hostname",
+      "UNIQUE"
+    ]
+  ],
+  "acceptedResourceRoles": [
+    "*",
+    "slave_public"
+  ],
+  "container": {
+    "type": "DOCKER",
+    "docker": {
+      "forcePullImage": true,
+      "image": "gisellevd/ospbench-cadvisor:1.0",
+      "parameters": [],
+      "privileged": true
+    },
+    "volumes": [
+      {
+        "containerPath": "/rootfs",
+        "hostPath": "/",
+        "mode": "RO"
+      },
+      {
+        "containerPath": "/var/run",
+        "hostPath": "/var/run",
+        "mode": "RW"
+      },
+      {
+        "containerPath": "/sys",
+        "hostPath": "/sys",
+        "mode": "RO"
+      },
+      {
+        "containerPath": "/var/lib/docker",
+        "hostPath": "/var/lib/docker",
+        "mode": "RO"
+      }
+    ],
+    "portMappings": [
+      {
+        "containerPort": 8080,
+        "hostPort": 8888,
+        "labels": {},
+        "name": "cadvisor",
+        "protocol": "tcp",
+        "servicePort": 18080
+      }
+    ]
+  },
+  "healthChecks": [
+    {
+      "gracePeriodSeconds": 300,
+      "ignoreHttp1xx": false,
+      "intervalSeconds": 60,
+      "maxConsecutiveFailures": 3,
+      "path": "/",
+      "portIndex": 0,
+      "protocol": "HTTP",
+      "ipProtocol": "IPv4",
+      "timeoutSeconds": 20,
+      "delaySeconds": 15
+    }
+  ],
+  "labels": {
+    "HAPROXY_0_STICKY": "true",
+    "HAPROXY_GROUP": "external"
+  },
+  "networks": [
+    {
+      "mode": "container/bridge"
+    }
+  ],
+  "portDefinitions": []
+}

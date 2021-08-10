@@ -1,0 +1,98 @@
+{
+  "id": "/spark-worker-${WORKER_NB}",
+  "acceptedResourceRoles": [
+    "*",
+    "slave_public"
+  ],
+  "backoffFactor": 1.15,
+  "backoffSeconds": 1,
+  "container": {
+    "type": "DOCKER",
+    "volumes": [],
+    "docker": {
+      "image": "gisellevd/ospbench-spark-worker:3.0.0",
+      "forcePullImage": true,
+      "privileged": false,
+      "parameters": [
+        {
+          "key": "label",
+          "value": "application=spark-worker-${WORKER_NB}"
+        },
+        {
+          "key": "user",
+          "value": "root"
+        }
+      ]
+    }
+  },
+  "cpus": $WORKER_CPU,
+  "disk": $DISK_MB,
+  "env": {
+    "CORES": "$WORKER_CPU",
+    "MEMORY": "${WORKER_MEM}g"
+  },
+  "instances": 1,
+  "maxLaunchDelaySeconds": 3600,
+  "mem": $WORKER_MEM_MB,
+  "gpus": 0,
+  "networks": [
+    {
+      "mode": "host"
+    }
+  ],
+  "portDefinitions": [
+    {
+      "name": "worker-web-ui",
+      "protocol": "udp,tcp",
+      "port": 7778
+    },
+    {
+      "name": "driver-web-ui",
+      "protocol": "udp,tcp",
+      "port": 4041
+    },
+    {
+      "name": "driver",
+      "protocol": "udp,tcp",
+      "port": 7001
+    },
+    {
+      "name": "fileserver",
+      "protocol": "udp,tcp",
+      "port": 7002
+    },
+    {
+      "name": "broadcast",
+      "protocol": "udp,tcp",
+      "port": 7003
+    },
+    {
+      "name": "replclassserver",
+      "protocol": "udp,tcp",
+      "port": 7004
+    },
+    {
+      "name": "blockmanager",
+      "protocol": "udp,tcp",
+      "port": 7005
+    },
+    {
+      "name": "executor",
+      "protocol": "udp,tcp",
+      "port": 7006
+    }
+  ],
+  "requirePorts": true,
+  "upgradeStrategy": {
+    "maximumOverCapacity": 1,
+    "minimumHealthCapacity": 1
+  },
+  "user": "root",
+  "killSelection": "YOUNGEST_FIRST",
+  "unreachableStrategy": {
+    "inactiveAfterSeconds": 0,
+    "expungeAfterSeconds": 0
+  },
+  "healthChecks": [],
+  "constraints": []
+}
