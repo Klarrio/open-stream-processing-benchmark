@@ -30,26 +30,34 @@ class StatelessStages(settings: BenchmarkSettingsForSpark, kafkaParams: Map[Stri
    * @return raw kafka stream
    */
   def ingestStage(ssc: StreamingContext): (DStream[(String, String, String, Long)], DStream[(String, String, String, Long)]) = {
-    val timeToString = "SPARK/" + System.currentTimeMillis()
+    val groupIdPrefix = "SPARK-ingest"
 
-    val kafkaParameters = Map[String, Object](
+    val kafkaParametersStream1 = Map[String, Object](
       "bootstrap.servers" -> settings.general.kafkaBootstrapServers,
       "key.deserializer" -> classOf[StringDeserializer],
       "value.deserializer" -> classOf[StringDeserializer],
-      "group.id" -> timeToString,
+      "group.id" -> (groupIdPrefix + "1"),
+      "auto.offset.reset" -> settings.general.kafkaAutoOffsetReset,
+      "enable.auto.commit" -> Boolean.box(true)
+    )
+    val kafkaParametersStream2 = Map[String, Object](
+      "bootstrap.servers" -> settings.general.kafkaBootstrapServers,
+      "key.deserializer" -> classOf[StringDeserializer],
+      "value.deserializer" -> classOf[StringDeserializer],
+      "group.id" -> (groupIdPrefix + "2"),
       "auto.offset.reset" -> settings.general.kafkaAutoOffsetReset,
       "enable.auto.commit" -> Boolean.box(true)
     )
     val preferredHosts = LocationStrategies.PreferConsistent
     val flowStream = KafkaUtils.createDirectStream[String, String](ssc,
       preferredHosts,
-      ConsumerStrategies.Subscribe[String, String](List(settings.general.flowTopic), kafkaParameters)
+      ConsumerStrategies.Subscribe[String, String](List(settings.general.flowTopic), kafkaParametersStream1)
     )
     .map { r: ConsumerRecord[String, String] => (r.topic(), r.key(), r.value(), r.timestamp()) }
 
     val speedStream = KafkaUtils.createDirectStream[String, String](ssc,
       preferredHosts,
-      ConsumerStrategies.Subscribe[String, String](List(settings.general.speedTopic), kafkaParameters)
+      ConsumerStrategies.Subscribe[String, String](List(settings.general.speedTopic), kafkaParametersStream2)
     ).map { r: ConsumerRecord[String, String] => (r.topic(), r.key(), r.value(), r.timestamp()) }
 
     (flowStream, speedStream)
@@ -87,13 +95,13 @@ class StatelessStages(settings: BenchmarkSettingsForSpark, kafkaParams: Map[Stri
    * @return raw flow stream
    */
   def ingestFlowStreamStage(ssc: StreamingContext): DStream[(String, String, String, Long)] = {
-    val timeToString = "SPARK/" + System.currentTimeMillis()
+    val groupId = "SPARK"
 
     val kafkaParameters = Map[String, Object](
       "bootstrap.servers" -> settings.general.kafkaBootstrapServers,
       "key.deserializer" -> classOf[StringDeserializer],
       "value.deserializer" -> classOf[StringDeserializer],
-      "group.id" -> timeToString,
+      "group.id" -> groupId,
       "auto.offset.reset" -> settings.general.kafkaAutoOffsetReset,
       "enable.auto.commit" -> Boolean.box(true)
     )

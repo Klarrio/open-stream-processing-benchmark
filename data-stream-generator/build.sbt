@@ -1,6 +1,6 @@
 import sbt.Keys.javaOptions
 
-name := "ndw-publisher"
+name := "ospbench-data-stream-generator"
 
 version := "3.0"
 
@@ -25,11 +25,6 @@ javaOptions in Universal ++= extJvmOpts
 javaOptions in Test ++= extJvmOpts
 // Docker configs
 javaOptions in Docker ++= extJvmOpts
-packageName in Docker := "344178916407.dkr.ecr.eu-central-1.amazonaws.com/ndw-publisher"
-maintainer in Docker := "Giselle van Dongen <giselle.vandongen@klarrio.com>"
-packageSummary in Docker := "Stream producer for NDW traffic information stream"
-packageDescription := "ndw-publisher"
-
 enablePlugins(JavaAppPackaging)
 
 

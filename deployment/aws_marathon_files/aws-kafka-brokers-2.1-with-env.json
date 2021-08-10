@@ -1,0 +1,58 @@
+{
+  "id": "/kafka/kafka-brokers",
+  "acceptedResourceRoles": [
+    "*",
+    "slave_public"
+  ],
+  "backoffFactor": 1.15,
+  "backoffSeconds": 1,
+  "container": {
+    "type": "DOCKER",
+    "volumes": [],
+    "docker": {
+      "image": "gisellevd/ospbench-kafka-broker:2.1.0",
+      "forcePullImage": false,
+      "privileged": true,
+      "parameters": []
+    }
+  },
+  "cpus": 4,
+  "disk": 30000,
+  "env": {
+    "KAFKA_ZOOKEEPER_CONNECT": "zk-1.zk:2181,zk-2.zk:2181,zk-3.zk:2181,zk-4.zk:2181,zk-5.zk:2181/kafka",
+    "KAFKA_HEAP_OPTS":"-Xmx9G -Xms9G"
+  },
+  "instances": $KAFKA_BROKER_COUNT,
+  "maxLaunchDelaySeconds": 3600,
+  "mem": 10240,
+  "gpus": 0,
+  "networks": [
+    {
+      "mode": "host"
+    }
+  ],
+  "portDefinitions": [
+    {
+      "name": "kafka",
+      "protocol": "udp,tcp",
+      "port": 10000
+    },
+    {
+      "name": "jmx",
+      "protocol": "udp,tcp",
+      "port": 10001
+    }
+  ],
+  "requirePorts": true,
+  "upgradeStrategy": {
+    "maximumOverCapacity": 1,
+    "minimumHealthCapacity": 1
+  },
+  "killSelection": "YOUNGEST_FIRST",
+  "unreachableStrategy": {
+    "inactiveAfterSeconds": 0,
+    "expungeAfterSeconds": 0
+  },
+  "healthChecks": [],
+  "constraints": []
+}

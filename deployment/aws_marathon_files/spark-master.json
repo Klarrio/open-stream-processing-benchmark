@@ -1,0 +1,69 @@
+{
+  "id": "/spark-master",
+  "acceptedResourceRoles": [
+    "*",
+    "slave_public"
+  ],
+  "backoffFactor": 1.15,
+  "backoffSeconds": 1,
+  "container": {
+    "type": "DOCKER",
+    "volumes": [],
+    "docker": {
+      "image": "gisellevd/ospbench-spark-master:3.0.0",
+      "forcePullImage": true,
+      "privileged": false,
+      "parameters": [
+        {
+          "key": "label",
+          "value": "application=spark-master"
+        },
+        {
+          "key": "user",
+          "value": "root"
+        }
+      ]
+    }
+  },
+  "cpus": 1,
+  "disk": 10240,
+  "instances": 1,
+  "maxLaunchDelaySeconds": 3600,
+  "mem": 4096,
+  "gpus": 0,
+  "networks": [
+    {
+      "mode": "host"
+    }
+  ],
+  "portDefinitions": [
+    {
+      "name": "master-web-ui",
+      "protocol": "udp,tcp",
+      "port": 7777
+    },
+    {
+      "name": "rest-url",
+      "protocol": "udp,tcp",
+      "port": 6060
+    },
+    {
+      "name": "master",
+      "protocol": "udp,tcp",
+      "port": 7077
+    }
+  ],
+  "requirePorts": true,
+  "upgradeStrategy": {
+    "maximumOverCapacity": 1,
+    "minimumHealthCapacity": 1
+  },
+  "user": "root",
+  "killSelection": "YOUNGEST_FIRST",
+  "unreachableStrategy": {
+    "inactiveAfterSeconds": 0,
+    "expungeAfterSeconds": 0
+  },
+  "healthChecks": [],
+  "constraints": []
+}

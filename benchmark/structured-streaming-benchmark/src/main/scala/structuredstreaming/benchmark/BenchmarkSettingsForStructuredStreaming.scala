@@ -28,7 +28,7 @@ class BenchmarkSettingsForStructuredStreaming(overrides: Map[String, Any] = Map(
       .getConfig(general.mode.name)
 
     val checkpointDir: String = if (general.local) general.configProperties.getString("spark.checkpoint.dir")
-    else "hdfs://" + general.hdfsActiveNameNode + "/checkpointDirStructured" + System.currentTimeMillis() + "/"
+    else "hdfs://" + general.hdfsActiveNameNode + "/checkpointDirStructured" + general.outputTopic + "/"
 
     val defaultParallelism: Int = general.configProperties.getInt("spark.default.parallelism")
     val sqlShufflePartitions: Int = general.configProperties.getInt("spark.sql.shuffle.partitions")

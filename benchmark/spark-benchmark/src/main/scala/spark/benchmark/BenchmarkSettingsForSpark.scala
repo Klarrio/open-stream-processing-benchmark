@@ -27,7 +27,7 @@ class BenchmarkSettingsForSpark(overrides: Map[String, Any] = Map()) extends Ser
       .getConfig(general.mode.name)
 
     val checkpointDir: String = if (general.local) general.configProperties.getString("spark.checkpoint.dir")
-    else "hdfs://" + general.hdfsActiveNameNode + "/checkpointDirStructured" + System.currentTimeMillis() + "/"
+    else "hdfs://" + general.hdfsActiveNameNode + "/checkpointDirSpark" + general.outputTopic + "/"
 
     val sparkMaster: String = general.configProperties.getString("spark.master")
 
@@ -39,7 +39,6 @@ class BenchmarkSettingsForSpark(overrides: Map[String, Any] = Map()) extends Ser
     val sqlShufflePartitions: Int = general.configProperties.getInt("spark.sql.shuffle.partitions")
     val blockInterval: Int = Math.min(batchInterval/defaultParallelism, 50)
     val localityWait: Int = sparkProperties.getInt("locality.wait")
-    val sqlMinBatchesToRetain: Int = sparkProperties.getInt("sql.streaming.minBatchesToRetain")
     val writeAheadLogEnabled: Boolean = sparkProperties.getBoolean("spark.streaming.receiver.writeAheadLog.enable")
     val jobProfileKey: String = general.mkJobProfileKey("spark", batchInterval)
   }

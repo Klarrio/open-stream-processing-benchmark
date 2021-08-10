@@ -31,7 +31,7 @@ class BenchmarkSettingsForFlink(overrides: Map[String, Any] = Map()) extends Ser
       val checkpointDir = new File(general.configProperties.getString("flink.checkpoint.dir"))
       Try(FileUtils.cleanDirectory(checkpointDir))
       "file://" + checkpointDir.getCanonicalPath
-    } else general.configProperties.getString("flink.checkpoint.dir") + System.currentTimeMillis() + "/"
+    } else general.configProperties.getString("flink.checkpoint.dir") + general.outputTopic + "/"
 
 
     val jobProfileKey: String = general.mkJobProfileKey("flink", bufferTimeout)

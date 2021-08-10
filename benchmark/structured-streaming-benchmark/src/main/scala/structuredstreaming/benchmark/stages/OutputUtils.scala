@@ -20,6 +20,7 @@ class OutputUtils(sparkSession: SparkSession, settings: BenchmarkSettingsForStru
       .format("kafka")
       .option("kafka.bootstrap.servers", settings.general.kafkaBootstrapServers)
       .option("topic", settings.general.outputTopic)
+      .option("checkpointLocation", settings.specific.checkpointDir)
       .trigger(settings.specific.trigger)
       .start()
     if (awaitTermination) kafkaWriter.awaitTermination()

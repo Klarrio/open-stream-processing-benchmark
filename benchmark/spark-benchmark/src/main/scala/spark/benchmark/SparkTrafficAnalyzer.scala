@@ -201,7 +201,7 @@ object SparkTrafficAnalyzer {
   def initSpark(settings: BenchmarkSettingsForSpark): (SparkSession, StreamingContext) = {
     val sparkSession = SparkSession.builder()
       .master(settings.specific.sparkMaster)
-      .appName("spark-streaming-benchmark" + System.currentTimeMillis())
+      .appName("spark-streaming-benchmark")
       .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
 //      .config("spark.kryo.registrationRequired", "true")
       .config(getKryoConfig)
@@ -222,15 +222,15 @@ object SparkTrafficAnalyzer {
    * @return [[Map]] containing Kafka configuration properties
    */
   def initKafka(settings: BenchmarkSettingsForSpark): Map[String, Object] = {
-    val timeToString = "SPARK/" + System.currentTimeMillis()
+    val groupId = "SPARK"
 
     Map[String, Object](
       "bootstrap.servers" -> settings.general.kafkaBootstrapServers,
       "key.deserializer" -> classOf[StringDeserializer],
       "value.deserializer" -> classOf[StringDeserializer],
-      "group.id" -> timeToString,
+      "group.id" -> groupId,
       "auto.offset.reset" -> settings.general.kafkaAutoOffsetReset,
-      "enable.auto.commit" -> Boolean.box(true)
+      "enable.auto.commit" -> Boolean.box(false)
     )
   }
 

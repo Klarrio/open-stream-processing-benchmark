@@ -1,0 +1,56 @@
+{
+  "id": "/benchmark/$MODE-publisher-$PUBLISHER_NB",
+  "acceptedResourceRoles": [
+    "*",
+    "slave_public"
+  ],
+  "backoffFactor": 1.15,
+  "backoffSeconds": 1,
+  "container": {
+    "type": "DOCKER",
+    "volumes": [],
+    "docker": {
+      "image": "gisellevd/ospbench-data-stream-generator:3.0",
+      "forcePullImage": true,
+      "privileged": false,
+      "parameters": []
+    }
+  },
+  "cpus": 3,
+  "disk": 0,
+  "env": {
+    "PUBLISHER_NB": "$PUBLISHER_NB",
+    "MODE": "$MODE",
+    "LAST_STAGE": "$LAST_STAGE",
+    "KAFKA_BOOTSTRAP_SERVERS": "$KAFKA_BOOTSTRAP_SERVERS",
+    "DATA_VOLUME": "$VOLUME_PER_PUBLISHER",
+    "FLOWTOPIC": "$FLOWTOPIC",
+    "SPEEDTOPIC": "$SPEEDTOPIC",
+    "NUM_PARTITIONS": "$NUM_PARTITIONS",
+    "S3_ACCESS_KEY": "$AWS_ACCESS_KEY",
+    "S3_SECRET_KEY": "$AWS_SECRET_KEY",
+    "RUNS_LOCAL":"false",
+    "INPUT_DATA_PATH": "$INPUT_DATA_PATH"
+  },
+  "instances": 0,
+  "maxLaunchDelaySeconds": 200,
+  "mem": 6000,
+  "gpus": 0,
+  "networks": [
+    {
+      "mode": "host"
+    }
+  ],
+  "requirePorts": true,
+  "upgradeStrategy": {
+    "maximumOverCapacity": 1,
+    "minimumHealthCapacity": 1
+  },
+  "killSelection": "YOUNGEST_FIRST",
+  "unreachableStrategy": {
+    "inactiveAfterSeconds": 0,
+    "expungeAfterSeconds": 0
+  },
+  "healthChecks": [],
+  "constraints": []
+}

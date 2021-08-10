@@ -1,0 +1,62 @@
+{
+  "id": "/influxdb",
+  "cmd": null,
+  "cpus": 1,
+  "mem": 2024,
+  "disk": 0,
+  "instances": 1,
+  "container": {
+    "type": "DOCKER",
+    "docker": {
+      "forcePullImage": true,
+      "image": "influxdb:0.13",
+      "parameters": [],
+      "privileged": false
+    },
+    "volumes": [
+      {
+        "containerPath": "/data",
+        "hostPath": "/tmp/influxdb",
+        "mode": "RW"
+      }
+    ],
+    "portMappings": [
+      {
+        "containerPort": 8083,
+        "hostPort": 8083,
+        "labels": {
+          "VIP_0": "/influxdb:8083"
+        },
+        "name": "influxdb-admin",
+        "protocol": "tcp",
+        "servicePort": 8083
+      },
+      {
+        "containerPort": 8086,
+        "hostPort": 8086,
+        "labels": {
+          "VIP_0": "/influxdb:8086",
+          "VIP_1": "/influxdb:8086"
+        },
+        "name": "influxdb-api",
+        "protocol": "tcp",
+        "servicePort": 8086
+      }
+    ]
+  },
+  "env": {
+    "PRE_CREATE_DB": "cadvisor",
+    "INFLUXDB_ADMIN_ENABLED": "true"
+  },
+  "networks": [
+    {
+      "name": "dcos",
+      "mode": "container"
+    }
+  ],
+  "portDefinitions": [],
+  "upgradeStrategy": {
+    "maximumOverCapacity": 0,
+    "minimumHealthCapacity": 0
+  }
+}
