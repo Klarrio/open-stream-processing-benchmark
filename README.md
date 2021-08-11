@@ -5,14 +5,14 @@ This repository contains the code of the open stream processing benchmark.
 All documentation can be found in our [wiki](https://github.com/Klarrio/open-stream-processing-benchmark/wiki).
 
 It includes:
-- [benchmark](./benchmark): benchmark pipeline implementations
-- [data-stream-generator](./data-stream-generator): data stream generator to generate input streams locally or on a DC/OS cluster
-- [output-consumer](./output-consumer): consumes the output of the processing job and metrics-exporter from Kafka and stores it on S3.
-- [evaluator](./evaluator): computes performance metrics on the output of the output consumer.
-- [result analysis](./result-analysis): Jupyter notebooks to visualize the results.
-- [deployment](./deployment): deployment scripts to run the benchmark on an DC/OS setup on AWS.
-- [kafka-cluster-tools](./kafka-cluster-tools): Kafka scripts to start a cluster and read from a topic for local development
-- [metrics-exporter](./metrics-exporter): exports metrics of JMX and cAdvisor and writes them to Kafka.
+- [benchmark](./benchmark): benchmark pipeline implementations ([docs](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Benchmark)).
+- [data-stream-generator](./data-stream-generator): data stream generator to generate input streams locally or on a DC/OS cluster ([docs](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Data-Stream-Generator)).
+- [output-consumer](./output-consumer): consumes the output of the processing job and metrics-exporter from Kafka and stores it on S3 ([docs](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Output-Consumer)).
+- [evaluator](./evaluator): computes performance metrics on the output of the output consumer ([docs](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Evaluation-Suite)).
+- [result analysis](./result-analysis): Jupyter notebooks to visualize the results ([docs](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Results-and-analysis)).
+- [deployment](./deployment): deployment scripts to run the benchmark on an DC/OS setup on AWS ([docs](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Architecture-and-deployment#deployment-on-aws-with-dcos)).
+- [kafka-cluster-tools](./kafka-cluster-tools): Kafka scripts to start a cluster and read from a topic for local development ([docs](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Architecture-and-deployment#local-deployment-for-development)).
+- [metrics-exporter](./metrics-exporter): exports metrics of JMX and cAdvisor and writes them to Kafka ([docs](https://github.com/Klarrio/open-stream-processing-benchmark/wiki/Metrics-Exporter)).
 
 Currently the benchmark includes Apache Spark (Spark Streaming and Structured Streaming), Apache Flink and Kafka Streams.
 ## References, Publications and Talks
