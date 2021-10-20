@@ -219,7 +219,7 @@ You will need to run the scripts from their folder (cd all the way to the script
 
 All scripts for Flink can be found at:
 
-    cd benchmark/automation_scripts/flink
+    cd deployment/automation_scripts/flink
     ls
 
 In order to run the scripts you need to have the Flink jar on S3. First build the jar as follows with SBT:
