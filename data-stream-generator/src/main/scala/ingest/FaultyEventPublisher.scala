@@ -64,7 +64,7 @@ class FaultyEventPublisher(sparkSession: SparkSession, kafkaProperties: Properti
       0.to(9).foreach { microBatch => //SUPPOSED TO LAST 100 MS
         smallGroupsList.foreach { smallList => //SUPPOSED TO LAST 5 MS
           smallList.foreach { observation =>
-            0.to(Math.round(ConfigUtils.dataVolume.toInt / 3.0).toInt).foreach { volumeIteration =>
+            1.to(ConfigUtils.dataVolume).foreach { volumeIteration =>
               if (sendError & index == 0 & ConfigUtils.publisherNb.toInt == 1) { // at minute 15 send an error
                 val msg = new ProducerRecord[String, String](
                   ConfigUtils.flowTopic,
