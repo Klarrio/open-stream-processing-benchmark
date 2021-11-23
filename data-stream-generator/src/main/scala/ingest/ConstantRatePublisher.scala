@@ -60,7 +60,7 @@ class ConstantRatePublisher(sparkSession: SparkSession, kafkaProperties: Propert
       0.to(9).foreach { microBatch => //SUPPOSED TO LAST 100 MS
         smallGroupsList.foreach { smallList => //SUPPOSED TO LAST 5 MS
           smallList.foreach { observation =>
-            0.to(Math.round(ConfigUtils.dataVolume.toInt/3.0).toInt).foreach { volumeIteration =>
+            1.to(ConfigUtils.dataVolume).foreach { volumeIteration =>
               if (observation.message.contains("flow")) {
                 flowStats.mark()
                 val msg = new ProducerRecord[String, String](

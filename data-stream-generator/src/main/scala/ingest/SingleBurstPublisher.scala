@@ -78,7 +78,7 @@ class SingleBurstPublisher(sparkSession: SparkSession, kafkaProperties: Properti
       0.to(9).foreach { microBatch => //SUPPOSED TO LAST 100 MS
         smallGroupsList.foreach { smallList => //SUPPOSED TO LAST 5 MS
           smallList.foreach { observation: Observation =>
-            0.to(Math.round(volume/3.0).toInt).foreach { volumeIteration =>
+            1.to(volume).foreach { volumeIteration =>
               if (observation.message.contains("flow")) {
                 flowStats.mark()
                 val msg = new ProducerRecord[String, String](
